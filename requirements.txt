@@ -1,6 +1,5 @@
 streamlit
-streamlit-option-menu
-streamlit
 pandas
 sqlalchemy
 psycopg2-binary
+psycopg
