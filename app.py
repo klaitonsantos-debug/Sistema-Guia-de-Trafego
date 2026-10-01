@@ -65,12 +65,10 @@ def criar_tabelas():
                 );
             """))
     except Exception:
-        # Se as tabelas/sequências já existirem, continua a execução normalmente
         pass
 
     try:
         with engine.begin() as conn:
-            # Insere usuário padrão Master se não existir
             res = conn.execute(text("SELECT * FROM usuarios WHERE usuario = 'Klaiton';")).fetchone()
             if not res:
                 conn.execute(text("INSERT INTO usuarios (usuario, senha, perfil) VALUES ('Klaiton', '134679', 'master');"))
@@ -172,7 +170,7 @@ if opcao == "Dashboard":
     with engine.connect() as conn:
         guias_em_dia = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento > :a AND status = 'Ativa';"), {"a": alerta_15}).fetchone()[0]
         guias_a_vencer = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento >= :t AND data_vencimento <= :a AND status = 'Ativa';"), {"t": today, "a": alerta_15}).fetchone()[0]
-        guias_vencidas = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento < :t AND status = 'Ativa';", {"t": today})).fetchone()[0]
+        guias_vencidas = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento < :t AND status = 'Ativa';"), {"t": today}).fetchone()[0]
         total_clientes = conn.execute(text("SELECT COUNT(*) FROM clientes;")).fetchone()[0]
     
     c1, c2, c3, c4 = st.columns(4)
