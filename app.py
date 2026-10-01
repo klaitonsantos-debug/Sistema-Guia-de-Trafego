@@ -19,7 +19,6 @@ st.set_page_config(
 def obter_engine():
     try:
         db_url = st.secrets["postgres"]["url"]
-        # Se a URL não tiver +psycopg2 explícito, ajustamos dinamicamente
         if db_url.startswith("postgresql://"):
             db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
         return create_engine(db_url, pool_pre_ping=True)
@@ -65,14 +64,18 @@ def criar_tabelas():
                     status VARCHAR(20) DEFAULT 'Ativa'
                 );
             """))
-            
-            # Usuário Padrão Master
+    except Exception:
+        # Se as tabelas/sequências já existirem, continua a execução normalmente
+        pass
+
+    try:
+        with engine.begin() as conn:
+            # Insere usuário padrão Master se não existir
             res = conn.execute(text("SELECT * FROM usuarios WHERE usuario = 'Klaiton';")).fetchone()
             if not res:
                 conn.execute(text("INSERT INTO usuarios (usuario, senha, perfil) VALUES ('Klaiton', '134679', 'master');"))
     except Exception as err:
-        st.error(f"❌ Não foi possível conectar ao banco de dados Supabase. Verifique a URL e a Senha nas Secrets do Streamlit.\n\nDetalhes do erro: {err}")
-        st.stop()
+        st.error(f"Erro ao inicializar usuário master: {err}")
 
 criar_tabelas()
 
@@ -169,7 +172,7 @@ if opcao == "Dashboard":
     with engine.connect() as conn:
         guias_em_dia = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento > :a AND status = 'Ativa';"), {"a": alerta_15}).fetchone()[0]
         guias_a_vencer = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento >= :t AND data_vencimento <= :a AND status = 'Ativa';"), {"t": today, "a": alerta_15}).fetchone()[0]
-        guias_vencidas = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento < :t AND status = 'Ativa';"), {"t": today}).fetchone()[0]
+        guias_vencidas = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento < :t AND status = 'Ativa';", {"t": today})).fetchone()[0]
         total_clientes = conn.execute(text("SELECT COUNT(*) FROM clientes;")).fetchone()[0]
     
     c1, c2, c3, c4 = st.columns(4)
