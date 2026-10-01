@@ -1,9 +1,8 @@
 import datetime
 import urllib.parse
 import pandas as pd
-import psycopg2
 import streamlit as st
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from streamlit_option_menu import option_menu
 
 # ==========================================
@@ -20,56 +19,57 @@ st.set_page_config(
 def obter_engine():
     try:
         db_url = st.secrets["postgres"]["url"]
-        return create_engine(db_url)
+        return create_engine(db_url, pool_pre_ping=True)
     except Exception as e:
-        st.error(f"Erro ao obter conexão das Secrets: {e}")
+        st.error(f"Erro ao ler as Secrets da base de dados: {e}")
         st.stop()
 
 engine = obter_engine()
 
-def conectar_bd():
-    return engine.connect()
-
 def criar_tabelas():
-    with engine.begin() as conn:
-        # Tabela de Usuários
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id SERIAL PRIMARY KEY,
-                usuario VARCHAR(100) UNIQUE NOT NULL,
-                senha VARCHAR(100) NOT NULL,
-                perfil VARCHAR(20) DEFAULT 'operador'
-            );
-        """)
-        
-        # Tabela de Clientes
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS clientes (
-                id SERIAL PRIMARY KEY,
-                nome VARCHAR(150) NOT NULL,
-                cpf VARCHAR(20) UNIQUE NOT NULL,
-                cr VARCHAR(50),
-                telefone VARCHAR(30) NOT NULL
-            );
-        """)
-        
-        # Tabela de Guias de Tráfego (GTs)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS guias (
-                id SERIAL PRIMARY KEY,
-                cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
-                numero_gt VARCHAR(50) NOT NULL,
-                arma_descricao TEXT NOT NULL,
-                calibre VARCHAR(30),
-                data_vencimento DATE NOT NULL,
-                status VARCHAR(20) DEFAULT 'Ativa'
-            );
-        """)
-        
-        # Usuário Padrão Master
-        res = conn.execute("SELECT * FROM usuarios WHERE usuario = 'Klaiton';").fetchone()
-        if not res:
-            conn.execute("INSERT INTO usuarios (usuario, senha, perfil) VALUES ('Klaiton', '134679', 'master');")
+    try:
+        with engine.begin() as conn:
+            # Tabela de Usuários
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id SERIAL PRIMARY KEY,
+                    usuario VARCHAR(100) UNIQUE NOT NULL,
+                    senha VARCHAR(100) NOT NULL,
+                    perfil VARCHAR(20) DEFAULT 'operador'
+                );
+            """))
+            
+            # Tabela de Clientes
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS clientes (
+                    id SERIAL PRIMARY KEY,
+                    nome VARCHAR(150) NOT NULL,
+                    cpf VARCHAR(20) UNIQUE NOT NULL,
+                    cr VARCHAR(50),
+                    telefone VARCHAR(30) NOT NULL
+                );
+            """))
+            
+            # Tabela de Guias de Tráfego (GTs)
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS guias (
+                    id SERIAL PRIMARY KEY,
+                    cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+                    numero_gt VARCHAR(50) NOT NULL,
+                    arma_descricao TEXT NOT NULL,
+                    calibre VARCHAR(30),
+                    data_vencimento DATE NOT NULL,
+                    status VARCHAR(20) DEFAULT 'Ativa'
+                );
+            """))
+            
+            # Usuário Padrão Master
+            res = conn.execute(text("SELECT * FROM usuarios WHERE usuario = 'Klaiton';")).fetchone()
+            if not res:
+                conn.execute(text("INSERT INTO usuarios (usuario, senha, perfil) VALUES ('Klaiton', '134679', 'master');"))
+    except Exception as err:
+        st.error(f"❌ Não foi possível conectar ao banco de dados Supabase. Verifique a URL e a Senha nas Secrets do Streamlit.\n\nDetalhes do erro: {err}")
+        st.stop()
 
 criar_tabelas()
 
@@ -85,7 +85,10 @@ if "perfil_logado" not in st.session_state:
 
 def realizar_login(usuario, senha):
     with engine.connect() as conn:
-        res = conn.execute("SELECT usuario, perfil FROM usuarios WHERE usuario = :u AND senha = :s;", {"u": usuario, "s": senha}).fetchone()
+        res = conn.execute(
+            text("SELECT usuario, perfil FROM usuarios WHERE usuario = :u AND senha = :s;"),
+            {"u": usuario, "s": senha}
+        ).fetchone()
         return res
 
 if not st.session_state["autenticado"]:
@@ -161,10 +164,10 @@ if opcao == "Dashboard":
     alerta_15 = today + datetime.timedelta(days=15)
     
     with engine.connect() as conn:
-        guias_em_dia = conn.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento > :a AND status = 'Ativa';", {"a": alerta_15}).fetchone()[0]
-        guias_a_vencer = conn.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento >= :t AND data_vencimento <= :a AND status = 'Ativa';", {"t": today, "a": alerta_15}).fetchone()[0]
-        guias_vencidas = conn.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento < :t AND status = 'Ativa';", {"t": today}).fetchone()[0]
-        total_clientes = conn.execute("SELECT COUNT(*) FROM clientes;").fetchone()[0]
+        guias_em_dia = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento > :a AND status = 'Ativa';"), {"a": alerta_15}).fetchone()[0]
+        guias_a_vencer = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento >= :t AND data_vencimento <= :a AND status = 'Ativa';"), {"t": today, "a": alerta_15}).fetchone()[0]
+        guias_vencidas = conn.execute(text("SELECT COUNT(*) FROM guias WHERE data_vencimento < :t AND status = 'Ativa';"), {"t": today}).fetchone()[0]
+        total_clientes = conn.execute(text("SELECT COUNT(*) FROM clientes;")).fetchone()[0]
     
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("✅ Guias Em Dia", guias_em_dia)
@@ -191,12 +194,12 @@ elif opcao == "Cadastrar Cliente":
                 try:
                     with engine.begin() as conn:
                         conn.execute(
-                            "INSERT INTO clientes (nome, cpf, cr, telefone) VALUES (:n, :c, :r, :t);",
+                            text("INSERT INTO clientes (nome, cpf, cr, telefone) VALUES (:n, :c, :r, :t);"),
                             {"n": nome, "c": cpf, "r": cr, "t": telefone}
                         )
-                    st.success(f"Cliente {nome} cadastrado com sucesso no Supabase!")
-                except Exception as ex:
-                    st.error(f"Erro ao salvar: CPF já cadastrado ou erro nos dados.")
+                    st.success(f"Cliente {nome} cadastrado com sucesso!")
+                except Exception:
+                    st.error("Erro ao salvar: CPF já cadastrado ou dados inválidos.")
             else:
                 st.warning("Preencha todos os campos obrigatórios (Nome, CPF e Telefone).")
 
@@ -207,7 +210,7 @@ elif opcao == "Gerenciar Clientes":
     st.title("👥 Gerenciamento de Clientes")
     
     with engine.connect() as conn:
-        clientes_lista = conn.execute("SELECT id, nome, cpf, cr, telefone FROM clientes ORDER BY nome ASC;").fetchall()
+        clientes_lista = conn.execute(text("SELECT id, nome, cpf, cr, telefone FROM clientes ORDER BY nome ASC;")).fetchall()
     
     if not clientes_lista:
         st.info("Nenhum cliente cadastrado no sistema.")
@@ -241,12 +244,12 @@ elif opcao == "Gerenciar Clientes":
                     if novo_nome and novo_cpf and novo_telefone:
                         try:
                             with engine.begin() as conn:
-                                conn.execute("""
+                                conn.execute(text("""
                                     UPDATE clientes 
                                     SET nome = :n, cpf = :c, cr = :r, telefone = :t
                                     WHERE id = :id;
-                                """, {"n": novo_nome, "c": novo_cpf, "r": novo_cr, "t": novo_telefone, "id": id_cli})
-                            st.success("Dados do cliente atualizados com sucesso no Supabase!")
+                                """), {"n": novo_nome, "c": novo_cpf, "r": novo_cr, "t": novo_telefone, "id": id_cli})
+                            st.success("Dados do cliente atualizados com sucesso!")
                             st.rerun()
                         except Exception:
                             st.error("O CPF informado já pertence a outro cliente.")
@@ -262,7 +265,7 @@ elif opcao == "Cadastrar Guia (GT)":
     st.title("📄 Emissão / Cadastro de Guia de Tráfego")
     
     with engine.connect() as conn:
-        clientes = conn.execute("SELECT id, nome, cpf FROM clientes ORDER BY nome;").fetchall()
+        clientes = conn.execute(text("SELECT id, nome, cpf FROM clientes ORDER BY nome;")).fetchall()
     
     if not clientes:
         st.warning("Nenhum cliente cadastrado. Cadastre um cliente primeiro.")
@@ -283,10 +286,10 @@ elif opcao == "Cadastrar Guia (GT)":
                 if numero_gt and arma_descricao and data_vencimento:
                     with engine.begin() as conn:
                         conn.execute(
-                            "INSERT INTO guias (cliente_id, numero_gt, arma_descricao, calibre, data_vencimento) VALUES (:cid, :gt, :arma, :cal, :venc);",
+                            text("INSERT INTO guias (cliente_id, numero_gt, arma_descricao, calibre, data_vencimento) VALUES (:cid, :gt, :arma, :cal, :venc);"),
                             {"cid": cliente_id, "gt": numero_gt, "arma": arma_descricao, "cal": calibre, "venc": data_vencimento}
                         )
-                    st.success("Guia de Tráfego cadastrada com sucesso no Supabase!")
+                    st.success("Guia de Tráfego cadastrada com sucesso!")
                 else:
                     st.warning("Preencha todos os campos obrigatórios.")
 
@@ -297,7 +300,7 @@ elif opcao == "Consultar & Alertas":
     st.title("🔍 Consulta de GTs e Alertas de Vencimento")
     
     with engine.connect() as conn:
-        registros = conn.execute("""
+        registros = conn.execute(text("""
             SELECT 
                 g.id,
                 c.nome,
@@ -309,7 +312,7 @@ elif opcao == "Consultar & Alertas":
             FROM guias g
             JOIN clientes c ON g.cliente_id = c.id
             ORDER BY g.data_vencimento ASC;
-        """).fetchall()
+        """)).fetchall()
     
     if registros:
         today = datetime.date.today()
@@ -365,8 +368,8 @@ elif opcao == "Gerenciar Usuários" and st.session_state["perfil_logado"] == "ma
                 if novo_user and nova_senha:
                     try:
                         with engine.begin() as conn:
-                            conn.execute("INSERT INTO usuarios (usuario, senha, perfil) VALUES (:u, :s, :p);", {"u": novo_user, "s": nova_senha, "p": perfil})
-                        st.success(f"Usuário '{novo_user}' criado com sucesso no Supabase!")
+                            conn.execute(text("INSERT INTO usuarios (usuario, senha, perfil) VALUES (:u, :s, :p);"), {"u": novo_user, "s": nova_senha, "p": perfil})
+                        st.success(f"Usuário '{novo_user}' criado com sucesso!")
                         st.rerun()
                     except Exception:
                         st.error("Nome de usuário já existe.")
@@ -376,7 +379,7 @@ elif opcao == "Gerenciar Usuários" and st.session_state["perfil_logado"] == "ma
     with col_alt:
         st.subheader("🔑 Alterar Senha de Operador")
         with engine.connect() as conn:
-            lista_users = conn.execute("SELECT id, usuario FROM usuarios ORDER BY usuario;").fetchall()
+            lista_users = conn.execute(text("SELECT id, usuario FROM usuarios ORDER BY usuario;")).fetchall()
         
         if lista_users:
             dict_users = {u[1]: u[0] for u in lista_users}
@@ -389,7 +392,7 @@ elif opcao == "Gerenciar Usuários" and st.session_state["perfil_logado"] == "ma
                 if btn_alterar:
                     if senha_nova:
                         with engine.begin() as conn:
-                            conn.execute("UPDATE usuarios SET senha = :s WHERE usuario = :u;", {"s": senha_nova, "u": user_sel})
+                            conn.execute(text("UPDATE usuarios SET senha = :s WHERE usuario = :u;"), {"s": senha_nova, "u": user_sel})
                         st.success(f"Senha do usuário '{user_sel}' alterada com sucesso!")
                     else:
                         st.warning("Digite a nova senha.")
@@ -398,7 +401,7 @@ elif opcao == "Gerenciar Usuários" and st.session_state["perfil_logado"] == "ma
     st.subheader("📋 Usuários Cadastrados no Sistema")
     
     with engine.connect() as conn:
-        usuarios_lista = conn.execute("SELECT id, usuario, perfil FROM usuarios;").fetchall()
+        usuarios_lista = conn.execute(text("SELECT id, usuario, perfil FROM usuarios;")).fetchall()
     
     df_users = pd.DataFrame(usuarios_lista, columns=["ID", "Usuário", "Perfil"])
     st.dataframe(df_users, use_container_width=True)
