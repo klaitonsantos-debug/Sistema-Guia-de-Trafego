@@ -114,8 +114,8 @@ with st.sidebar:
     st.caption(f"👤 Usuário: **{st.session_state['usuario_logado']}** | 🔰 **{st.session_state['perfil_logado'].upper()}**")
     st.divider()
 
-    opcoes = ["Dashboard", "Cadastrar Cliente", "Cadastrar Guia (GT)", "Consultar & Alertas"]
-    icones = ["speedometer2", "person-plus", "file-earmark-plus", "search"]
+    opcoes = ["Dashboard", "Cadastrar Cliente", "Gerenciar Clientes", "Cadastrar Guia (GT)", "Consultar & Alertas"]
+    icones = ["speedometer2", "person-plus", "people", "file-earmark-plus", "search"]
 
     if st.session_state["perfil_logado"] == "master":
         opcoes.append("Gerenciar Usuários")
@@ -175,7 +175,7 @@ if opcao == "Dashboard":
     
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("✅ Guias Em Dia", guias_em_dia)
-    c2.metric("⚠️️ A Vencer (15 dias)", guias_a_vencer)
+    c2.metric("⚠ A Vencer (15 dias)", guias_a_vencer)
     c3.metric("🚨 GTs Vencidas", guias_vencidas)
     c4.metric("👥 Total de Clientes", total_clientes)
 
@@ -209,6 +209,69 @@ elif opcao == "Cadastrar Cliente":
                     st.error("CPF já cadastrado no sistema.")
             else:
                 st.warning("Preencha todos os campos obrigatórios (Nome, CPF e Telefone).")
+
+# ------------------------------------------
+# ABA: GERENCIAR CLIENTES (VISUALIZAR E EDITAR)
+# ------------------------------------------
+elif opcao == "Gerenciar Clientes":
+    st.title("👥 Gerenciamento de Clientes")
+    
+    conn = conectar_bd()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nome, cpf, cr, telefone FROM clientes ORDER BY nome ASC")
+    clientes_lista = cursor.fetchall()
+    conn.close()
+    
+    if not clientes_lista:
+        st.info("Nenhum cliente cadastrado no sistema.")
+    else:
+        st.subheader("📋 Lista de Clientes Cadastrados")
+        
+        # Filtro de Busca
+        busca = st.text_input("🔍 Buscar cliente por nome ou CPF:")
+        
+        clientes_filtrados = [
+            c for c in clientes_lista 
+            if busca.lower() in c[1].lower() or busca in c[2]
+        ]
+        
+        if clientes_filtrados:
+            dict_clientes = {f"{c[1]} (CPF: {c[2]})": c for c in clientes_filtrados}
+            cliente_sel_nome = st.selectbox("Selecione um cliente para visualizar ou alterar:", list(dict_clientes.keys()))
+            cliente_dados = dict_clientes[cliente_sel_nome]
+            
+            st.divider()
+            st.markdown(f"### ✏️ Alterar Dados do Cliente: **{cliente_dados[1]}**")
+            
+            with st.form("form_editar_cliente"):
+                id_cli = cliente_dados[0]
+                novo_nome = st.text_input("Nome Completo", value=cliente_dados[1])
+                novo_cpf = st.text_input("CPF", value=cliente_dados[2])
+                novo_cr = st.text_input("Número do CR", value=cliente_dados[3] if cliente_dados[3] else "")
+                novo_telefone = st.text_input("Telefone / WhatsApp", value=cliente_dados[4])
+                
+                btn_atualizar = st.form_submit_button("💾 Salvar Alterações")
+                
+                if btn_atualizar:
+                    if novo_nome and novo_cpf and novo_telefone:
+                        try:
+                            conn = conectar_bd()
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                UPDATE clientes 
+                                SET nome = ?, cpf = ?, cr = ?, telefone = ?
+                                WHERE id = ?
+                            """, (novo_nome, novo_cpf, novo_cr, novo_telefone, id_cli))
+                            conn.commit()
+                            conn.close()
+                            st.success("Dados do cliente atualizados com sucesso!")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("O CPF informado já pertence a outro cliente.")
+                    else:
+                        st.warning("Preencha todos os campos obrigatórios (Nome, CPF e Telefone).")
+        else:
+            st.warning("Nenhum cliente encontrado com a busca informada.")
 
 # ------------------------------------------
 # ABA: CADASTRAR GUIA (GT)
