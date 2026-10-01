@@ -19,6 +19,9 @@ st.set_page_config(
 def obter_engine():
     try:
         db_url = st.secrets["postgres"]["url"]
+        # Se a URL não tiver +psycopg2 explícito, ajustamos dinamicamente
+        if db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
         return create_engine(db_url, pool_pre_ping=True)
     except Exception as e:
         st.error(f"Erro ao ler as Secrets da base de dados: {e}")
