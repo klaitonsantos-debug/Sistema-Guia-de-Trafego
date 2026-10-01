@@ -3,7 +3,8 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 # Conexão com o Supabase usando as Secrets do Streamlit
-engine = create_engine(st.secrets["postgres"]["url"])import sqlite3
+engine = create_engine(st.secrets["postgres"]["url"])
+import sqlite3
 import datetime
 import urllib.parse
 import streamlit as st
