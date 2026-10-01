@@ -1,13 +1,9 @@
-import streamlit as st
-import pandas as pd
-from sqlalchemy import create_engine
-
-# Conexão com o Supabase usando as Secrets do Streamlit
-engine = create_engine(st.secrets["postgres"]["url"])
-import sqlite3
 import datetime
 import urllib.parse
+import pandas as pd
+import psycopg2
 import streamlit as st
+from sqlalchemy import create_engine
 from streamlit_option_menu import option_menu
 
 # ==========================================
@@ -19,9 +15,20 @@ st.set_page_config(
     layout="wide"
 )
 
+# Conexão automática com o Supabase usando as Secrets do Streamlit
+@st.cache_resource
+def obter_engine():
+    try:
+        db_url = st.secrets["postgres"]["url"]
+        return create_engine(db_url)
+    except Exception as e:
+        st.error(f"Erro ao obter conexão das Secrets: {e}")
+        st.stop()
+
+engine = obter_engine()
+
 def conectar_bd():
-    conn = sqlite3.connect("gestao_gts.db")
-    return conn
+    return engine.raw_connection()
 
 def criar_tabelas():
     conn = conectar_bd()
@@ -30,42 +37,41 @@ def criar_tabelas():
     # Tabela de Usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT UNIQUE NOT NULL,
-            senha TEXT NOT NULL,
-            perfil TEXT DEFAULT 'operador'
-        )
+            id SERIAL PRIMARY KEY,
+            usuario VARCHAR(100) UNIQUE NOT NULL,
+            senha VARCHAR(100) NOT NULL,
+            perfil VARCHAR(20) DEFAULT 'operador'
+        );
     """)
     
     # Tabela de Clientes
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            cpf TEXT UNIQUE NOT NULL,
-            cr TEXT,
-            telefone TEXT NOT NULL
-        )
+            id SERIAL PRIMARY KEY,
+            nome VARCHAR(150) NOT NULL,
+            cpf VARCHAR(20) UNIQUE NOT NULL,
+            cr VARCHAR(50),
+            telefone VARCHAR(30) NOT NULL
+        );
     """)
     
     # Tabela de Guias de Tráfego (GTs)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS guias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cliente_id INTEGER NOT NULL,
-            numero_gt TEXT NOT NULL,
+            id SERIAL PRIMARY KEY,
+            cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+            numero_gt VARCHAR(50) NOT NULL,
             arma_descricao TEXT NOT NULL,
-            calibre TEXT,
+            calibre VARCHAR(30),
             data_vencimento DATE NOT NULL,
-            status TEXT DEFAULT 'Ativa',
-            FOREIGN KEY (cliente_id) REFERENCES clientes (id)
-        )
+            status VARCHAR(20) DEFAULT 'Ativa'
+        );
     """)
     
     # Usuário Padrão Master
-    cursor.execute("SELECT * FROM usuarios WHERE usuario = 'Klaiton'")
+    cursor.execute("SELECT * FROM usuarios WHERE usuario = 'Klaiton';")
     if not cursor.fetchone():
-        cursor.execute("INSERT INTO usuarios (usuario, senha, perfil) VALUES ('Klaiton', '134679', 'master')")
+        cursor.execute("INSERT INTO usuarios (usuario, senha, perfil) VALUES ('Klaiton', '134679', 'master');")
         
     conn.commit()
     conn.close()
@@ -85,7 +91,7 @@ if "perfil_logado" not in st.session_state:
 def realizar_login(usuario, senha):
     conn = conectar_bd()
     cursor = conn.cursor()
-    cursor.execute("SELECT usuario, perfil FROM usuarios WHERE usuario = ? AND senha = ?", (usuario, senha))
+    cursor.execute("SELECT usuario, perfil FROM usuarios WHERE usuario = %s AND senha = %s;", (usuario, senha))
     user = cursor.fetchone()
     conn.close()
     return user
@@ -165,23 +171,23 @@ if opcao == "Dashboard":
     today = datetime.date.today()
     alerta_15 = today + datetime.timedelta(days=15)
     
-    cursor.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento > ? AND status = 'Ativa'", (alerta_15,))
+    cursor.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento > %s AND status = 'Ativa';", (alerta_15,))
     guias_em_dia = cursor.fetchone()[0]
     
-    cursor.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento >= ? AND data_vencimento <= ? AND status = 'Ativa'", (today, alerta_15))
+    cursor.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento >= %s AND data_vencimento <= %s AND status = 'Ativa';", (today, alerta_15))
     guias_a_vencer = cursor.fetchone()[0]
     
-    cursor.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento < ? AND status = 'Ativa'", (today,))
+    cursor.execute("SELECT COUNT(*) FROM guias WHERE data_vencimento < %s AND status = 'Ativa';", (today,))
     guias_vencidas = cursor.fetchone()[0]
     
-    cursor.execute("SELECT COUNT(*) FROM clientes")
+    cursor.execute("SELECT COUNT(*) FROM clientes;")
     total_clientes = cursor.fetchone()[0]
     
     conn.close()
     
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("✅ Guias Em Dia", guias_em_dia)
-    c2.metric("⚠ A Vencer (15 dias)", guias_a_vencer)
+    c2.metric("⚠️ A Vencer (15 dias)", guias_a_vencer)
     c3.metric("🚨 GTs Vencidas", guias_vencidas)
     c4.metric("👥 Total de Clientes", total_clientes)
 
@@ -205,26 +211,26 @@ elif opcao == "Cadastrar Cliente":
                     conn = conectar_bd()
                     cursor = conn.cursor()
                     cursor.execute(
-                        "INSERT INTO clientes (nome, cpf, cr, telefone) VALUES (?, ?, ?, ?)",
+                        "INSERT INTO clientes (nome, cpf, cr, telefone) VALUES (%s, %s, %s, %s);",
                         (nome, cpf, cr, telefone)
                     )
                     conn.commit()
                     conn.close()
-                    st.success(f"Cliente {nome} cadastrado com sucesso!")
-                except sqlite3.IntegrityError:
-                    st.error("CPF já cadastrado no sistema.")
+                    st.success(f"Cliente {nome} cadastrado com sucesso no Supabase!")
+                except Exception:
+                    st.error("CPF já cadastrado ou erro ao salvar dados.")
             else:
                 st.warning("Preencha todos os campos obrigatórios (Nome, CPF e Telefone).")
 
 # ------------------------------------------
-# ABA: GERENCIAR CLIENTES (VISUALIZAR E EDITAR)
+# ABA: GERENCIAR CLIENTES
 # ------------------------------------------
 elif opcao == "Gerenciar Clientes":
     st.title("👥 Gerenciamento de Clientes")
     
     conn = conectar_bd()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nome, cpf, cr, telefone FROM clientes ORDER BY nome ASC")
+    cursor.execute("SELECT id, nome, cpf, cr, telefone FROM clientes ORDER BY nome ASC;")
     clientes_lista = cursor.fetchall()
     conn.close()
     
@@ -232,8 +238,6 @@ elif opcao == "Gerenciar Clientes":
         st.info("Nenhum cliente cadastrado no sistema.")
     else:
         st.subheader("📋 Lista de Clientes Cadastrados")
-        
-        # Filtro de Busca
         busca = st.text_input("🔍 Buscar cliente por nome ou CPF:")
         
         clientes_filtrados = [
@@ -247,7 +251,7 @@ elif opcao == "Gerenciar Clientes":
             cliente_dados = dict_clientes[cliente_sel_nome]
             
             st.divider()
-            st.markdown(f"### ✏️ Alterar Dados do Cliente: **{cliente_dados[1]}**")
+            st.markdown(f"### ✏️️ Alterar Dados do Cliente: **{cliente_dados[1]}**")
             
             with st.form("form_editar_cliente"):
                 id_cli = cliente_dados[0]
@@ -265,19 +269,19 @@ elif opcao == "Gerenciar Clientes":
                             cursor = conn.cursor()
                             cursor.execute("""
                                 UPDATE clientes 
-                                SET nome = ?, cpf = ?, cr = ?, telefone = ?
-                                WHERE id = ?
+                                SET nome = %s, cpf = %s, cr = %s, telefone = %s
+                                WHERE id = %s;
                             """, (novo_nome, novo_cpf, novo_cr, novo_telefone, id_cli))
                             conn.commit()
                             conn.close()
-                            st.success("Dados do cliente atualizados com sucesso!")
+                            st.success("Dados do cliente atualizados com sucesso no Supabase!")
                             st.rerun()
-                        except sqlite3.IntegrityError:
+                        except Exception:
                             st.error("O CPF informado já pertence a outro cliente.")
                     else:
-                        st.warning("Preencha todos os campos obrigatórios (Nome, CPF e Telefone).")
+                        st.warning("Preencha todos os campos obrigatórios.")
         else:
-            st.warning("Nenhum cliente encontrado com a busca informada.")
+            st.warning("Nenhum cliente encontrado.")
 
 # ------------------------------------------
 # ABA: CADASTRAR GUIA (GT)
@@ -287,7 +291,7 @@ elif opcao == "Cadastrar Guia (GT)":
     
     conn = conectar_bd()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nome, cpf FROM clientes ORDER BY nome")
+    cursor.execute("SELECT id, nome, cpf FROM clientes ORDER BY nome;")
     clientes = cursor.fetchall()
     conn.close()
     
@@ -311,12 +315,12 @@ elif opcao == "Cadastrar Guia (GT)":
                     conn = conectar_bd()
                     cursor = conn.cursor()
                     cursor.execute(
-                        "INSERT INTO guias (cliente_id, numero_gt, arma_descricao, calibre, data_vencimento) VALUES (?, ?, ?, ?, ?)",
+                        "INSERT INTO guias (cliente_id, numero_gt, arma_descricao, calibre, data_vencimento) VALUES (%s, %s, %s, %s, %s);",
                         (cliente_id, numero_gt, arma_descricao, calibre, data_vencimento)
                     )
                     conn.commit()
                     conn.close()
-                    st.success("Guia de Tráfego cadastrada com sucesso!")
+                    st.success("Guia de Tráfego cadastrada com sucesso no Supabase!")
                 else:
                     st.warning("Preencha todos os campos obrigatórios.")
 
@@ -340,7 +344,7 @@ elif opcao == "Consultar & Alertas":
             g.status
         FROM guias g
         JOIN clientes c ON g.cliente_id = c.id
-        ORDER BY g.data_vencimento ASC
+        ORDER BY g.data_vencimento ASC;
     """)
     registros = cursor.fetchall()
     conn.close()
@@ -349,8 +353,7 @@ elif opcao == "Consultar & Alertas":
         today = datetime.date.today()
         
         for r in registros:
-            gt_id, nome, telefone, num_gt, arma, vencimento_str, status = r
-            data_venc = datetime.datetime.strptime(vencimento_str, "%Y-%m-%d").date()
+            gt_id, nome, telefone, num_gt, arma, data_venc, status = r
             dias_restantes = (data_venc - today).days
             
             col1, col2, col3 = st.columns([3, 2, 2])
@@ -387,7 +390,6 @@ elif opcao == "Gerenciar Usuários" and st.session_state["perfil_logado"] == "ma
     
     col_cad, col_alt = st.columns(2)
     
-    # Formulário 1: Novo Usuário
     with col_cad:
         st.subheader("➕ Cadastrar Novo Operador")
         with st.form("form_novo_usuario", clear_on_submit=True):
@@ -402,22 +404,21 @@ elif opcao == "Gerenciar Usuários" and st.session_state["perfil_logado"] == "ma
                     try:
                         conn = conectar_bd()
                         cursor = conn.cursor()
-                        cursor.execute("INSERT INTO usuarios (usuario, senha, perfil) VALUES (?, ?, ?)", (novo_user, nova_senha, perfil))
+                        cursor.execute("INSERT INTO usuarios (usuario, senha, perfil) VALUES (%s, %s, %s);", (novo_user, nova_senha, perfil))
                         conn.commit()
                         conn.close()
-                        st.success(f"Usuário '{novo_user}' criado com sucesso!")
+                        st.success(f"Usuário '{novo_user}' criado com sucesso no Supabase!")
                         st.rerun()
-                    except sqlite3.IntegrityError:
+                    except Exception:
                         st.error("Nome de usuário já existe.")
                 else:
                     st.warning("Preencha usuário e senha.")
                     
-    # Formulário 2: Alterar Senha de Usuários
     with col_alt:
         st.subheader("🔑 Alterar Senha de Operador")
         conn = conectar_bd()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, usuario FROM usuarios ORDER BY usuario")
+        cursor.execute("SELECT id, usuario FROM usuarios ORDER BY usuario;")
         lista_users = cursor.fetchall()
         conn.close()
         
@@ -433,7 +434,7 @@ elif opcao == "Gerenciar Usuários" and st.session_state["perfil_logado"] == "ma
                     if senha_nova:
                         conn = conectar_bd()
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE usuarios SET senha = ? WHERE usuario = ?", (senha_nova, user_sel))
+                        cursor.execute("UPDATE usuarios SET senha = %s WHERE usuario = %s;", (senha_nova, user_sel))
                         conn.commit()
                         conn.close()
                         st.success(f"Senha do usuário '{user_sel}' alterada com sucesso!")
@@ -445,8 +446,9 @@ elif opcao == "Gerenciar Usuários" and st.session_state["perfil_logado"] == "ma
     
     conn = conectar_bd()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, usuario, perfil FROM usuarios")
+    cursor.execute("SELECT id, usuario, perfil FROM usuarios;")
     usuarios_lista = cursor.fetchall()
     conn.close()
     
-    st.table(usuarios_lista)
+    df_users = pd.DataFrame(usuarios_lista, columns=["ID", "Usuário", "Perfil"])
+    st.dataframe(df_users, use_container_width=True)
