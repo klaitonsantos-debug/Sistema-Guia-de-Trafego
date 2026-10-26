@@ -142,8 +142,12 @@ def buscar_usuarios_supabase():
 
 def salvar_usuario_supabase(login, dados):
     if supabase:
-        payload = {"login": login, **dados}
-        supabase.table("usuarios").insert(payload).execute()
+        try:
+            payload = {"login": login, **dados}
+            res = supabase.table("usuarios").insert(payload).execute()
+            st.success("Usuário salvo com sucesso na nuvem!")
+        except Exception as e:
+            st.error(f"Erro detalhado do Supabase: {e}")
 
 def atualizar_usuario_supabase(login_antigo, login_novo, dados):
     if supabase:
