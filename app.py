@@ -187,8 +187,11 @@ if st.session_state.usuario_logado is None:
             
             if btn_entrar:
                 if usuario_input in st.session_state.usuarios_db and st.session_state.usuarios_db[usuario_input]["senha"] == senha_input:
-                    st.session_state.usuario_logado = st.session_state.usuarios_db[usuario_input]
-                    st.success(f"Bem-vindo, {st.session_state.usuario_logado['nome']}!")
+                    # Guardar a chave de login atual no objeto da sessão para referência de edição/senha
+                    user_data = st.session_state.usuarios_db[usuario_input].copy()
+                    user_data["login_chave"] = usuario_input
+                    st.session_state.usuario_logado = user_data
+                    st.success(f"Bem-vindo, {user_data['nome']}!")
                     st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
@@ -200,6 +203,7 @@ if st.session_state.usuario_logado is None:
 user_info = st.session_state.usuario_logado
 perfil = user_info["perfil"]
 colaborador_atual = user_info["nome"]
+login_atual = user_info["login_chave"]
 gera_comissao_atual = user_info.get("gera_comissao", True)
 
 with st.sidebar:
@@ -240,6 +244,12 @@ with st.sidebar:
             st.rerun()
             
     st.divider()
+    
+    # Botão rápido para colaborador ou qualquer usuário alterar a própria senha
+    if st.button("🔑 Alterar Minha Senha", use_container_width=True):
+        st.session_state.menu_ativo = "🔑 Alterar Minha Senha"
+        st.rerun()
+
     if st.button("🚪 Sair / Logout", use_container_width=True):
         st.session_state.usuario_logado = None
         st.rerun()
@@ -1135,7 +1145,37 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                 st.info("Nenhum processo concluído no histórico.")
 
 # ------------------------------------------
-# SEÇÃO 6: SERVIÇOS & EQUIPE (ADMINISTRAÇÃO)
+# SEÇÃO 6: ALTERAR MINHA SENHA (PARA QUALQUER USUÁRIO)
+# ------------------------------------------
+elif menu_selecionado == "🔑 Alterar Minha Senha":
+    st.header("🔑 Alterar Minha Senha de Acesso")
+    st.caption(f"Usuário logado: **{user_info['nome']}** (`{login_atual}`)")
+    
+    col_ps1, col_ps2, col_ps3 = st.columns([1, 2, 1])
+    with col_ps2:
+        with st.form("form_mudar_propria_senha"):
+            senha_atual_input = st.text_input("Digite sua Senha Atual", type="password")
+            nova_senha_input = st.text_input("Digite a Nova Senha", type="password")
+            confirma_nova_senha = st.text_input("Confirme a Nova Senha", type="password")
+            
+            btn_salvar_senha = st.form_submit_button("💾 Atualizar Minha Senha", use_container_width=True)
+            
+            if btn_salvar_senha:
+                if login_atual in st.session_state.usuarios_db:
+                    if st.session_state.usuarios_db[login_atual]["senha"] == senha_atual_input:
+                        if nova_senha_input and nova_senha_input == confirma_nova_senha:
+                            st.session_state.usuarios_db[login_atual]["senha"] = nova_senha_input
+                            st.session_state.usuario_logado["senha"] = nova_senha_input
+                            st.success("Sua senha foi alterada com sucesso!")
+                        else:
+                            st.error("A nova senha e a confirmação não coincidem ou estão vazias.")
+                    else:
+                        st.error("A senha atual informada está incorreta.")
+                else:
+                    st.error("Erro de identificação do usuário.")
+
+# ------------------------------------------
+# SEÇÃO 7: SERVIÇOS & EQUIPE (ADMINISTRAÇÃO)
 # ------------------------------------------
 elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "Gestor"]:
     st.header("⚙️ Administração de Serviços e Equipe")
@@ -1188,7 +1228,12 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
             nu_user = st.text_input("Login (Usuário)")
             nu_nome = st.text_input("Nome Completo")
             nu_senha = st.text_input("Senha", type="password")
-            nu_perfil = st.selectbox("Perfil de Acesso", ["Colaborador", "Gestor"])
+            
+            # Gestor pode cadastrar Colaboradores e Gestores. Master pode cadastrar Master, Gestor e Colaborador.
+            perfis_cadastro = ["Colaborador", "Gestor"]
+            if perfil == "Master":
+                perfis_cadastro.append("Master")
+            nu_perfil = st.selectbox("Perfil de Acesso", perfis_cadastro)
             nu_gera_com = st.checkbox("Gera Comissões Financeiras?", value=True)
             
             if st.form_submit_button("Cadastrar Usuário"):
@@ -1208,35 +1253,38 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
                     st.error("Preencha todos os campos obrigatórios.")
         
         st.divider()
-        st.markdown("###### 📋 Lista de Usuários Cadastrados (Editar / Excluir)")
+        st.markdown("###### 📋 Lista de Usuários Cadastrados (Editar Login/Senha / Excluir)")
         
         for login_k, u_val in list(st.session_state.usuarios_db.items()):
-            # Permitir gerenciar gestores e colaboradores (e Master se for Master)
+            # Se for Gestor, não pode gerenciar usuários com perfil Master
             if perfil == "Gestor" and u_val["perfil"] == "Master":
                 continue
                 
             c_u1, c_u2, c_u3 = st.columns([4, 1, 1])
             with c_u1:
                 comissao_status = "Com Comissão" if u_val.get("gera_comissao", True) else "Sem Comissão"
-                st.markdown(f"👤 **{u_val['nome']}** (Login: `{login_k}`) | Perfil: **{u_val['perfil']}** | {comissao_status}")
+                st.markdown(f"👤 **{u_val['nome']}** | Login: `{login_k}` | Perfil: **{u_val['perfil']}** | {comissao_status}")
             with c_u2:
                 if st.button("✏️ Editar", key=f"btn_edit_u_{login_k}"):
                     st.session_state[f"edit_u_{login_k}"] = not st.session_state.get(f"edit_u_{login_k}", False)
                     st.rerun()
             with c_u3:
-                if login_k != user_info["nome"] and login_k != "Klaiton":
+                # Evitar que o usuário exclua a si mesmo
+                if login_k != login_atual:
                     if st.button("🗑️ Excluir", key=f"btn_exc_u_{login_k}"):
                         del st.session_state.usuarios_db[login_k]
                         st.warning(f"Usuário {u_val['nome']} removido!")
                         st.rerun()
                 else:
-                    st.caption("Protegido")
+                    st.caption("Você")
 
             if st.session_state.get(f"edit_u_{login_k}", False):
                 with st.form(f"form_ed_u_{login_k}"):
                     st.markdown(f"**Editando Usuário: {u_val['nome']}**")
+                    
+                    ed_novo_login = st.text_input("Alterar Login (Usuário)", value=login_k, key=f"ed_login_{login_k}")
                     ed_u_nome = st.text_input("Nome Completo", value=u_val["nome"], key=f"ed_nome_{login_k}")
-                    ed_u_senha = st.text_input("Nova Senha", value=u_val["senha"], type="password", key=f"ed_senha_{login_k}")
+                    ed_u_senha = st.text_input("Senha", value=u_val["senha"], type="password", key=f"ed_senha_{login_k}")
                     
                     perfis_op = ["Colaborador", "Gestor"]
                     if perfil == "Master":
@@ -1247,19 +1295,36 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
                     ed_u_com = st.checkbox("Gera Comissões?", value=u_val.get("gera_comissao", True), key=f"ed_com_{login_k}")
                     
                     if st.form_submit_button("💾 Salvar Alterações"):
-                        st.session_state.usuarios_db[login_k] = {
-                            "senha": ed_u_senha,
-                            "nome": ed_u_nome,
-                            "perfil": ed_u_perfil,
-                            "gera_comissao": ed_u_com
-                        }
-                        st.session_state[f"edit_u_{login_k}"] = False
-                        st.success("Usuário atualizado com sucesso!")
-                        st.rerun()
+                        ed_novo_login_limpo = ed_novo_login.strip()
+                        if not ed_novo_login_limpo:
+                            st.error("O login não pode ficar vazio.")
+                        elif ed_novo_login_limpo != login_k and ed_novo_login_limpo in st.session_state.usuarios_db:
+                            st.error("Este novo login já está sendo usado por outro usuário.")
+                        else:
+                            # Se o login mudou, remover a chave antiga e criar a nova
+                            if ed_novo_login_limpo != login_k:
+                                st.session_state.usuarios_db[ed_novo_login_limpo] = {
+                                    "senha": ed_u_senha,
+                                    "nome": ed_u_nome,
+                                    "perfil": ed_u_perfil,
+                                    "gera_comissao": ed_u_com
+                                }
+                                del st.session_state.usuarios_db[login_k]
+                            else:
+                                st.session_state.usuarios_db[login_k] = {
+                                    "senha": ed_u_senha,
+                                    "nome": ed_u_nome,
+                                    "perfil": ed_u_perfil,
+                                    "gera_comissao": ed_u_com
+                                }
+                            
+                            st.session_state[f"edit_u_{login_k}"] = False
+                            st.success("Dados do usuário atualizados com sucesso!")
+                            st.rerun()
             st.markdown("---")
 
 # ------------------------------------------
-# SEÇÃO 7: RELATÓRIOS GERENCIAIS (MASTER / GESTOR)
+# SEÇÃO 8: RELATÓRIOS GERENCIAIS (MASTER / GESTOR)
 # ------------------------------------------
 elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", "Gestor"]:
     st.header("📊 Relatórios Gerenciais e de Comissões")
