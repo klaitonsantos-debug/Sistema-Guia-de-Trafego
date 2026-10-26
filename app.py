@@ -150,16 +150,14 @@ def buscar_usuarios_supabase():
                     "gera_comissao": row["gera_comissao"]
                 }
             return dic
-    return st.session_state.get("usuarios_db", {
+    return {
         "Klaiton": {"senha": "134679", "nome": "Klaiton (Master)", "perfil": "Master", "gera_comissao": True}
-    })
+    }
 
 def salvar_usuario_supabase(login, dados):
     if supabase:
         payload = {"login": login, **dados}
         supabase.table("usuarios").insert(payload).execute()
-    else:
-        st.session_state.usuarios_db[login] = dados
 
 def atualizar_usuario_supabase(login_antigo, login_novo, dados):
     if supabase:
@@ -168,19 +166,10 @@ def atualizar_usuario_supabase(login_antigo, login_novo, dados):
             supabase.table("usuarios").insert({"login": login_novo, **dados}).execute()
         else:
             supabase.table("usuarios").update(dados).eq("login", login_antigo).execute()
-    else:
-        if login_antigo != login_novo:
-            st.session_state.usuarios_db[login_novo] = dados
-            del st.session_state.usuarios_db[login_antigo]
-        else:
-            st.session_state.usuarios_db[login_antigo] = dados
 
 def excluir_usuario_supabase(login):
     if supabase:
         supabase.table("usuarios").delete().eq("login", login).execute()
-    else:
-        if login in st.session_state.usuarios_db:
-            del st.session_state.usuarios_db[login]
 
 # Funções de Guias de Tráfego
 def buscar_guias_supabase():
