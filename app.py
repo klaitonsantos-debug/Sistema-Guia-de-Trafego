@@ -103,6 +103,86 @@ def init_supabase() -> Client:
 
 supabase = init_supabase()
 
+# Funções de Supabase para Clientes
+def buscar_clientes_supabase():
+    if supabase:
+        res = supabase.table("clientes").select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"])
+    else:
+        return st.session_state.get("clientes_db", pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"]))
+
+def salvar_cliente_supabase(dados):
+    if supabase:
+        supabase.table("clientes").insert(dados).execute()
+    else:
+        novo_c = dados.copy()
+        novo_c["id"] = len(st.session_state.clientes_db) + 1
+        st.session_state.clientes_db = pd.concat([st.session_state.clientes_db, pd.DataFrame([novo_c])], ignore_index=True)
+
+def atualizar_cliente_supabase(cli_id, dados):
+    if supabase:
+        supabase.table("clientes").update(dados).eq("id", cli_id).execute()
+    else:
+        idx = st.session_state.clientes_db[st.session_state.clientes_db["id"] == cli_id].index
+        if not idx.empty:
+            for k, v in dados.items():
+                st.session_state.clientes_db.loc[idx, k] = v
+
+def excluir_cliente_supabase(cli_id):
+    if supabase:
+        supabase.table("clientes").delete().eq("id", cli_id).execute()
+    else:
+        idx = st.session_state.clientes_db[st.session_state.clientes_db["id"] == cli_id].index
+        if not idx.empty:
+            st.session_state.clientes_db = st.session_state.clientes_db.drop(idx).reset_index(drop=True)
+
+# Funções de Supabase para Usuários
+def buscar_usuarios_supabase():
+    if supabase:
+        res = supabase.table("usuarios").select("*").execute()
+        if res.data:
+            dic = {}
+            for row in res.data:
+                dic[row["login"]] = {
+                    "senha": row["senha"],
+                    "nome": row["nome"],
+                    "perfil": row["perfil"],
+                    "gera_comissao": row["gera_comissao"]
+                }
+            return dic
+    return st.session_state.get("usuarios_db", {
+        "Klaiton": {"senha": "134679", "nome": "Klaiton (Master)", "perfil": "Master", "gera_comissao": True}
+    })
+
+def salvar_usuario_supabase(login, dados):
+    if supabase:
+        payload = {"login": login, **dados}
+        supabase.table("usuarios").insert(payload).execute()
+    else:
+        st.session_state.usuarios_db[login] = dados
+
+def atualizar_usuario_supabase(login_antigo, login_novo, dados):
+    if supabase:
+        if login_antigo != login_novo:
+            supabase.table("usuarios").delete().eq("login", login_antigo).execute()
+            supabase.table("usuarios").insert({"login": login_novo, **dados}).execute()
+        else:
+            supabase.table("usuarios").update(dados).eq("login", login_antigo).execute()
+    else:
+        if login_antigo != login_novo:
+            st.session_state.usuarios_db[login_novo] = dados
+            del st.session_state.usuarios_db[login_antigo]
+        else:
+            st.session_state.usuarios_db[login_antigo] = dados
+
+def excluir_usuario_supabase(login):
+    if supabase:
+        supabase.table("usuarios").delete().eq("login", login).execute()
+    else:
+        if login in st.session_state.usuarios_db:
+            del st.session_state.usuarios_db[login]
+
+# Funções de Guias de Tráfego
 def buscar_guias_supabase():
     if supabase:
         res = supabase.table("guias_trafego").select("*").execute()
@@ -127,17 +207,8 @@ def atualizar_validade_guia_supabase(guia_id, nova_validade):
             st.session_state.guias_trafego_db.loc[idx, "validade"] = nova_validade
 
 # ==========================================
-# BANCO DE DADOS EM SESSÃO (SESSION STATE LOCAL)
+# CATÁLOGO DE SERVIÇOS E SESSÕES
 # ==========================================
-
-if "usuarios_db" not in st.session_state:
-    st.session_state.usuarios_db = {
-        "Klaiton": {"senha": "134679", "nome": "Klaiton (Master)", "perfil": "Master", "gera_comissao": True}
-    }
-
-if "clientes_db" not in st.session_state:
-    st.session_state.clientes_db = pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"])
-
 if "servicos_catalogo" not in st.session_state:
     st.session_state.servicos_catalogo = [
         {"servico": "Concessão de CR", "comissao": 150.00},
@@ -154,9 +225,6 @@ if "processos_lancados" not in st.session_state:
         "valor_comissao", "tipo_processo", "data_envio", "mes_referencia", "comissao_devida", "comprovante"
     ])
 
-if "guias_trafego_db" not in st.session_state:
-    st.session_state.guias_trafego_db = pd.DataFrame(columns=["id", "cliente_nome", "cr", "equipamento", "validade", "telefone"])
-
 if "agenda_processos" not in st.session_state:
     st.session_state.agenda_processos = pd.DataFrame(columns=[
         "id", "data_cadastro", "cliente_nome", "cidade", "despachante", "tipo_servico", "arma_equipamento", "status", "teste_psicologico", "teste_tiro"
@@ -169,8 +237,10 @@ if "menu_ativo" not in st.session_state:
     st.session_state.menu_ativo = "👤 Cadastro Único de Clientes"
 
 # ==========================================
-# TELA DE LOGIN (SEM EXIBIR USUÁRIOS/SENHAS)
+# TELA DE LOGIN
 # ==========================================
+usuarios_db_atual = buscar_usuarios_supabase()
+
 if st.session_state.usuario_logado is None:
     st.markdown("<h1 style='text-align: center;'>🎯 CLUBE DE TIRO ZANCANARO</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Abelardo Luz - SC | Sistema de Gestão & Despachante</h3>", unsafe_allow_html=True)
@@ -183,8 +253,8 @@ if st.session_state.usuario_logado is None:
             btn_entrar = st.form_submit_button("🔓 Entrar no Sistema", use_container_width=True)
             
             if btn_entrar:
-                if usuario_input in st.session_state.usuarios_db and st.session_state.usuarios_db[usuario_input]["senha"] == senha_input:
-                    user_data = st.session_state.usuarios_db[usuario_input].copy()
+                if usuario_input in usuarios_db_atual and usuarios_db_atual[usuario_input]["senha"] == senha_input:
+                    user_data = usuarios_db_atual[usuario_input].copy()
                     user_data["login_chave"] = usuario_input
                     st.session_state.usuario_logado = user_data
                     st.success(f"Bem-vindo, {user_data['nome']}!")
@@ -194,7 +264,7 @@ if st.session_state.usuario_logado is None:
     st.stop()
 
 # ==========================================
-# PAINEL PRINCIPAL & MENU LATERAL EM BOTÕES
+# PAINEL PRINCIPAL & MENU LATERAL
 # ==========================================
 user_info = st.session_state.usuario_logado
 perfil = user_info["perfil"]
@@ -251,9 +321,10 @@ with st.sidebar:
 
 menu_selecionado = st.session_state.menu_ativo
 
-lista_nomes_clientes = sorted(st.session_state.clientes_db["nome"].tolist()) if not st.session_state.clientes_db.empty else []
-lista_colaboradores = [u["nome"] for u in st.session_state.usuarios_db.values() if u["perfil"] == "Colaborador"]
-lista_todos_despachantes = [u["nome"] for u in st.session_state.usuarios_db.values()]
+clientes_db_atual = buscar_clientes_supabase()
+lista_nomes_clientes = sorted(clientes_db_atual["nome"].tolist()) if not clientes_db_atual.empty else []
+lista_colaboradores = [u["nome"] for u in usuarios_db_atual.values() if u["perfil"] == "Colaborador"]
+lista_todos_despachantes = [u["nome"] for u in usuarios_db_atual.values()]
 
 # ------------------------------------------
 # SEÇÃO 1: CADASTRO ÚNICO DE CLIENTES
@@ -274,11 +345,15 @@ if menu_selecionado == "👤 Cadastro Único de Clientes":
         col_m1, col_m2 = st.columns(2)
         with col_m1:
             if st.button("✅ OK, Confirmar Cadastro", key="btn_conf_cli_ok", use_container_width=True):
-                novo_id = len(st.session_state.clientes_db) + 1
-                novo_c = {"id": novo_id, "nome": dados_novo["nome"], "cpf": dados_novo["cpf"], "cr": dados_novo["cr"], "telefone": dados_novo["telefone"], "cidade": dados_novo["cidade"]}
-                st.session_state.clientes_db = pd.concat([st.session_state.clientes_db, pd.DataFrame([novo_c])], ignore_index=True)
+                salvar_cliente_supabase({
+                    "nome": dados_novo["nome"],
+                    "cpf": dados_novo["cpf"],
+                    "cr": dados_novo["cr"],
+                    "telefone": dados_novo["telefone"],
+                    "cidade": dados_novo["cidade"]
+                })
                 del st.session_state.temp_novo_cliente
-                st.success(f"Cliente '{dados_novo['nome']}' cadastrado com sucesso!")
+                st.success(f"Cliente '{dados_novo['nome']}' cadastrado com sucesso na nuvem!")
                 st.rerun()
         with col_m2:
             if st.button("❌ Cancelar", key="btn_canc_cli_ok", use_container_width=True):
@@ -319,13 +394,13 @@ elif menu_selecionado == "🏙️ Clientes por Cidade":
     
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        cidades_no_banco = sorted(st.session_state.clientes_db["cidade"].unique().tolist()) if not st.session_state.clientes_db.empty else []
+        cidades_no_banco = sorted(clientes_db_atual["cidade"].unique().tolist()) if not clientes_db_atual.empty else []
         cidade_filtro = st.selectbox("🔍 Selecione a Cidade para Filtrar:", ["Todas as Cidades"] + cidades_no_banco)
     
     with col_f2:
         busca_nome = st.text_input("🔎 Buscar Cliente por Nome:").strip().lower()
 
-    df_cidades = st.session_state.clientes_db.copy() if not st.session_state.clientes_db.empty else pd.DataFrame()
+    df_cidades = clientes_db_atual.copy() if not clientes_db_atual.empty else pd.DataFrame()
     
     if not df_cidades.empty:
         if cidade_filtro != "Todas as Cidades":
@@ -371,11 +446,9 @@ elif menu_selecionado == "🏙️ Clientes por Cidade":
                         
                 with c_ex:
                     if st.button("🗑️ Excluir", key=f"btn_excluir_cli_{cli_id}", use_container_width=True):
-                        idx_cli_rem = st.session_state.clientes_db[st.session_state.clientes_db["id"] == cli_id].index
-                        if not idx_cli_rem.empty:
-                            st.session_state.clientes_db = st.session_state.clientes_db.drop(idx_cli_rem).reset_index(drop=True)
-                            st.warning(f"Cliente '{cliente['nome']}' removido com sucesso!")
-                            st.rerun()
+                        excluir_cliente_supabase(cli_id)
+                        st.warning(f"Cliente '{cliente['nome']}' removido com sucesso!")
+                        st.rerun()
 
                 if st.session_state.get(f"editando_cli_{cli_id}", False):
                     with st.form(f"form_ed_cli_{cli_id}"):
@@ -395,16 +468,16 @@ elif menu_selecionado == "🏙️ Clientes por Cidade":
                         
                         if st.form_submit_button("💾 Salvar Alterações"):
                             cidade_nova_completa = f"{ed_cidade_nome.strip()} - {ed_estado}"
-                            idx_up_c = st.session_state.clientes_db[st.session_state.clientes_db["id"] == cli_id].index
-                            if not idx_up_c.empty:
-                                st.session_state.clientes_db.loc[idx_up_c, "nome"] = ed_nome
-                                st.session_state.clientes_db.loc[idx_up_c, "cpf"] = ed_cpf
-                                st.session_state.clientes_db.loc[idx_up_c, "cr"] = ed_cr
-                                st.session_state.clientes_db.loc[idx_up_c, "telefone"] = ed_tel
-                                st.session_state.clientes_db.loc[idx_up_c, "cidade"] = cidade_nova_completa
-                                st.session_state[f"editando_cli_{cli_id}"] = False
-                                st.success("Dados atualizados com sucesso!")
-                                st.rerun()
+                            atualizar_cliente_supabase(cli_id, {
+                                "nome": ed_nome,
+                                "cpf": ed_cpf,
+                                "cr": ed_cr,
+                                "telefone": ed_tel,
+                                "cidade": cidade_nova_completa
+                            })
+                            st.session_state[f"editando_cli_{cli_id}"] = False
+                            st.success("Dados atualizados com sucesso!")
+                            st.rerun()
         else:
             st.info("Nenhum cliente encontrado.")
     else:
@@ -424,7 +497,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
         df_mes = df_proc[df_proc["mes_referencia"] == mes_atual] if not df_proc.empty else df_proc
         
         colaboradores_com_comissao = [
-            u["nome"] for u in st.session_state.usuarios_db.values() 
+            u["nome"] for u in usuarios_db_atual.values() 
             if u["perfil"] == "Colaborador" and u.get("gera_comissao", True)
         ]
         
@@ -605,7 +678,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
                 disabled=travar_cliente
             )
             
-            cliente_obj = st.session_state.clientes_db[st.session_state.clientes_db["nome"] == cliente_sel_nome]
+            cliente_obj = clientes_db_atual[clientes_db_atual["nome"] == cliente_sel_nome]
             cidade_auto = cliente_obj["cidade"].values[0] if not cliente_obj.empty else "Abelardo Luz - SC"
             st.info(f"📍 Cidade: **{cidade_auto}**")
             numero_proc = st.text_input("Número do Processo (SISGCORP / PF)")
@@ -623,7 +696,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
         
         if btn_sub_proc:
             if cliente_sel_nome and numero_proc:
-                info_resp = st.session_state.usuarios_db.get(next((k for k, v in st.session_state.usuarios_db.items() if v["nome"] == colaborador_responsavel), ""), {})
+                info_resp = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == colaborador_responsavel), ""), {})
                 colab_gera_comissao = info_resp.get("gera_comissao", True)
                 
                 valor_base = next((s["comissao"] for s in st.session_state.servicos_catalogo if s["servico"] == servico_sel), 50.0)
@@ -651,7 +724,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
                 st.rerun()
 
 # ------------------------------------------
-# SEÇÃO 4: GUIAS DE TRÁFEGO (CONECTADA AO SUPABASE)
+# SEÇÃO 4: GUIAS DE TRÁFEGO
 # ------------------------------------------
 elif menu_selecionado == "📜 Guias de Tráfego":
     st.header("📜 Emissão e Gestão de Guias de Tráfego")
@@ -687,7 +760,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                     }
                     salvar_guia_supabase(dados_nova_gt_db)
                     
-                    info_resp_gt = st.session_state.usuarios_db.get(next((k for k, v in st.session_state.usuarios_db.items() if v["nome"] == tg["colaborador"]), ""), {})
+                    info_resp_gt = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == tg["colaborador"]), ""), {})
                     colab_gt_com = info_resp_gt.get("gera_comissao", True)
                     val_gt_com = 5.00 if colab_gt_com else 0.00
                     
@@ -756,7 +829,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
             idx_cli_gt = lista_nomes_clientes.index(cliente_gt_pre) if cliente_gt_pre in lista_nomes_clientes else 0
             gt_cliente = st.selectbox("Atirador / Cliente", lista_nomes_clientes if lista_nomes_clientes else ["Nenhum"], index=idx_cli_gt, disabled=travar_cli_gt)
             
-            cr_obj = st.session_state.clientes_db[st.session_state.clientes_db["nome"] == gt_cliente]
+            cr_obj = clientes_db_atual[clientes_db_atual["nome"] == gt_cliente]
             cr_auto = cr_obj["cr"].values[0] if not cr_obj.empty else ""
             tel_auto = cr_obj["telefone"].values[0] if not cr_obj.empty else "5549999999999"
             cidade_gt_auto = cr_obj["cidade"].values[0] if not cr_obj.empty else "Abelardo Luz - SC"
@@ -838,10 +911,10 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                 nova_val_str = dt_ren_av.strftime("%Y-%m-%d")
                                 atualizar_validade_guia_supabase(r['id'], nova_val_str)
                                 
-                                cr_obj = st.session_state.clientes_db[st.session_state.clientes_db["nome"] == r['cliente_nome']]
+                                cr_obj = clientes_db_atual[clientes_db_atual["nome"] == r['cliente_nome']]
                                 cid_r = cr_obj["cidade"].values[0] if not cr_obj.empty else "Abelardo Luz - SC"
                                 
-                                info_resp_ren = st.session_state.usuarios_db.get(next((k for k, v in st.session_state.usuarios_db.items() if v["nome"] == colab_ren_av), ""), {})
+                                info_resp_ren = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == colab_ren_av), ""), {})
                                 com_ren_val = 5.00 if info_resp_ren.get("gera_comissao", True) else 0.00
                                 
                                 proc_ren = {
@@ -892,10 +965,10 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                 nova_val_v_str = dt_ren_v.strftime("%Y-%m-%d")
                                 atualizar_validade_guia_supabase(r['id'], nova_val_v_str)
                                 
-                                cr_obj = st.session_state.clientes_db[st.session_state.clientes_db["nome"] == r['cliente_nome']]
+                                cr_obj = clientes_db_atual[clientes_db_atual["nome"] == r['cliente_nome']]
                                 cid_r = cr_obj["cidade"].values[0] if not cr_obj.empty else "Abelardo Luz - SC"
                                 
-                                info_resp_ren_v = st.session_state.usuarios_db.get(next((k for k, v in st.session_state.usuarios_db.items() if v["nome"] == colab_ren_v), ""), {})
+                                info_resp_ren_v = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == colab_ren_v), ""), {})
                                 com_ren_val_v = 5.00 if info_resp_ren_v.get("gera_comissao", True) else 0.00
                                 
                                 proc_ren = {
@@ -991,7 +1064,7 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
             btn_sub_agenda = st.form_submit_button("🗓️ Confirmar Agendamento")
             
             if btn_sub_agenda:
-                cli_info = st.session_state.clientes_db[st.session_state.clientes_db["nome"] == ag_cliente]
+                cli_info = clientes_db_atual[clientes_db_atual["nome"] == ag_cliente]
                 cidade_cad_auto = cli_info["cidade"].values[0] if not cli_info.empty else "Abelardo Luz - SC"
                 
                 st.session_state.temp_novo_agendamento = {
@@ -1097,7 +1170,7 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                                     e_tiro = st.checkbox("🎯 Teste de Tiro Feito?", value=val_tiro_bool, key=f"e_tiro_{ag_id}")
                                 
                                 if st.form_submit_button("💾 Salvar Alterações"):
-                                    cli_inf_ed = st.session_state.clientes_db[st.session_state.clientes_db["nome"] == e_cli]
+                                    cli_inf_ed = clientes_db_atual[clientes_db_atual["nome"] == e_cli]
                                     nova_cid_ed = cli_inf_ed["cidade"].values[0] if not cli_inf_ed.empty else "Abelardo Luz - SC"
                                     
                                     idx_up = st.session_state.agenda_processos[st.session_state.agenda_processos["id"] == ag_id].index
@@ -1140,7 +1213,7 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                 st.info("Nenhum processo concluído no histórico.")
 
 # ------------------------------------------
-# SEÇÃO 6: ALTERAR MINHA SENHA (PARA QUALQUER USUÁRIO)
+# SEÇÃO 6: ALTERAR MINHA SENHA
 # ------------------------------------------
 elif menu_selecionado == "🔑 Alterar Minha Senha":
     st.header("🔑 Alterar Minha Senha de Acesso")
@@ -1156,12 +1229,14 @@ elif menu_selecionado == "🔑 Alterar Minha Senha":
             btn_salvar_senha = st.form_submit_button("💾 Atualizar Minha Senha", use_container_width=True)
             
             if btn_salvar_senha:
-                if login_atual in st.session_state.usuarios_db:
-                    if st.session_state.usuarios_db[login_atual]["senha"] == senha_atual_input:
+                if login_atual in usuarios_db_atual:
+                    if usuarios_db_atual[login_atual]["senha"] == senha_atual_input:
                         if nova_senha_input and nova_senha_input == confirma_nova_senha:
-                            st.session_state.usuarios_db[login_atual]["senha"] = nova_senha_input
+                            dados_atuais = usuarios_db_atual[login_atual]
+                            dados_atuais["senha"] = nova_senha_input
+                            atualizar_usuario_supabase(login_atual, login_atual, dados_atuais)
                             st.session_state.usuario_logado["senha"] = nova_senha_input
-                            st.success("Sua senha foi alterada com sucesso!")
+                            st.success("Sua senha foi alterada com sucesso na nuvem!")
                         else:
                             st.error("A nova senha e a confirmação não coincidem ou estão vazias.")
                     else:
@@ -1216,7 +1291,7 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
         st.dataframe(pd.DataFrame(st.session_state.servicos_catalogo), use_container_width=True)
 
     with sub_tab2:
-        st.markdown("##### 👥 Cadastro e Gerenciamento de Usuários")
+        st.markdown("##### 👥 Cadastro e Gerenciamento de Usuários (Nuvem)")
         
         with st.form("form_novo_usuario", clear_on_submit=True):
             st.markdown("###### Adicionar Novo Colaborador ou Gestor")
@@ -1232,16 +1307,16 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
             
             if st.form_submit_button("Cadastrar Usuário"):
                 if nu_user and nu_nome and nu_senha:
-                    if nu_user in st.session_state.usuarios_db:
+                    if nu_user in usuarios_db_atual:
                         st.error("Este login já existe.")
                     else:
-                        st.session_state.usuarios_db[nu_user] = {
+                        salvar_usuario_supabase(nu_user.strip(), {
                             "senha": nu_senha,
                             "nome": nu_nome,
                             "perfil": nu_perfil,
                             "gera_comissao": nu_gera_com
-                        }
-                        st.success(f"Usuário {nu_nome} cadastrado com sucesso!")
+                        })
+                        st.success(f"Usuário {nu_nome} cadastrado com sucesso na nuvem!")
                         st.rerun()
                 else:
                     st.error("Preencha todos os campos obrigatórios.")
@@ -1249,7 +1324,7 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
         st.divider()
         st.markdown("###### 📋 Lista de Usuários Cadastrados (Editar Login/Senha / Excluir)")
         
-        for login_k, u_val in list(st.session_state.usuarios_db.items()):
+        for login_k, u_val in list(usuarios_db_atual.items()):
             if perfil == "Gestor" and u_val["perfil"] == "Master":
                 continue
                 
@@ -1264,7 +1339,7 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
             with c_u3:
                 if login_k != login_atual:
                     if st.button("🗑️ Excluir", key=f"btn_exc_u_{login_k}"):
-                        del st.session_state.usuarios_db[login_k]
+                        excluir_usuario_supabase(login_k)
                         st.warning(f"Usuário {u_val['nome']} removido!")
                         st.rerun()
                 else:
@@ -1290,32 +1365,22 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
                         ed_novo_login_limpo = ed_novo_login.strip()
                         if not ed_novo_login_limpo:
                             st.error("O login não pode ficar vazio.")
-                        elif ed_novo_login_limpo != login_k and ed_novo_login_limpo in st.session_state.usuarios_db:
+                        elif ed_novo_login_limpo != login_k and ed_novo_login_limpo in usuarios_db_atual:
                             st.error("Este novo login já está sendo usado por outro usuário.")
                         else:
-                            if ed_novo_login_limpo != login_k:
-                                st.session_state.usuarios_db[ed_novo_login_limpo] = {
-                                    "senha": ed_u_senha,
-                                    "nome": ed_u_nome,
-                                    "perfil": ed_u_perfil,
-                                    "gera_comissao": ed_u_com
-                                }
-                                del st.session_state.usuarios_db[login_k]
-                            else:
-                                st.session_state.usuarios_db[login_k] = {
-                                    "senha": ed_u_senha,
-                                    "nome": ed_u_nome,
-                                    "perfil": ed_u_perfil,
-                                    "gera_comissao": ed_u_com
-                                }
-                            
+                            atualizar_usuario_supabase(login_k, ed_novo_login_limpo, {
+                                "senha": ed_u_senha,
+                                "nome": ed_u_nome,
+                                "perfil": ed_u_perfil,
+                                "gera_comissao": ed_u_com
+                            })
                             st.session_state[f"edit_u_{login_k}"] = False
-                            st.success("Dados do usuário atualizados com sucesso!")
+                            st.success("Dados do usuário atualizados com sucesso na nuvem!")
                             st.rerun()
             st.markdown("---")
 
 # ------------------------------------------
-# SEÇÃO 8: RELATÓRIOS GERENCIAIS (MASTER / GESTOR)
+# SEÇÃO 8: RELATÓRIOS GERENCIAIS
 # ------------------------------------------
 elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", "Gestor"]:
     st.header("📊 Relatórios Gerenciais e de Comissões")
@@ -1332,7 +1397,7 @@ elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", 
             ano_escolhido = st.selectbox("📅 Filtrar por Ano:", ["Todos os Anos"] + anos_disponiveis)
         with col_rf2:
             meses_disponiveis = sorted(df_proc_rel["mes_referencia"].unique().tolist(), reverse=True)
-            mes_escolhido = st.selectbox("📆 Filtrar por Mês:", ["Todos los Meses" if 'Meses' in 'Todos os Meses' else "Todos os Meses"] + meses_disponiveis)
+            mes_escolhido = st.selectbox("📆 Filtrar por Mês:", ["Todos os Meses"] + meses_disponiveis)
         with col_rf3:
             cidades_disponiveis = sorted(df_proc_rel["cidade"].unique().tolist())
             cidade_escolhida = st.selectbox("🏙️ Filtrar por Cidade:", ["Todas as Cidades"] + cidades_disponiveis)
