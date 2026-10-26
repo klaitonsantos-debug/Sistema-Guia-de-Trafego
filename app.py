@@ -108,33 +108,19 @@ def buscar_clientes_supabase():
     if supabase:
         res = supabase.table("clientes").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"])
-    else:
-        return st.session_state.get("clientes_db", pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"]))
+    return pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"])
 
 def salvar_cliente_supabase(dados):
     if supabase:
         supabase.table("clientes").insert(dados).execute()
-    else:
-        novo_c = dados.copy()
-        novo_c["id"] = len(st.session_state.clientes_db) + 1
-        st.session_state.clientes_db = pd.concat([st.session_state.clientes_db, pd.DataFrame([novo_c])], ignore_index=True)
 
 def atualizar_cliente_supabase(cli_id, dados):
     if supabase:
         supabase.table("clientes").update(dados).eq("id", cli_id).execute()
-    else:
-        idx = st.session_state.clientes_db[st.session_state.clientes_db["id"] == cli_id].index
-        if not idx.empty:
-            for k, v in dados.items():
-                st.session_state.clientes_db.loc[idx, k] = v
 
 def excluir_cliente_supabase(cli_id):
     if supabase:
         supabase.table("clientes").delete().eq("id", cli_id).execute()
-    else:
-        idx = st.session_state.clientes_db[st.session_state.clientes_db["id"] == cli_id].index
-        if not idx.empty:
-            st.session_state.clientes_db = st.session_state.clientes_db.drop(idx).reset_index(drop=True)
 
 # Funções de Supabase para Usuários
 def buscar_usuarios_supabase():
@@ -171,29 +157,64 @@ def excluir_usuario_supabase(login):
     if supabase:
         supabase.table("usuarios").delete().eq("login", login).execute()
 
-# Funções de Guias de Tráfego
+# Funções de Supabase para Guias de Tráfego
 def buscar_guias_supabase():
     if supabase:
         res = supabase.table("guias_trafego").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
-    else:
-        return st.session_state.get("guias_trafego_db", pd.DataFrame())
+    return pd.DataFrame()
 
 def salvar_guia_supabase(dados_guia):
     if supabase:
         supabase.table("guias_trafego").insert(dados_guia).execute()
-    else:
-        nova_gt = dados_guia.copy()
-        nova_gt["id"] = len(st.session_state.guias_trafego_db) + 1
-        st.session_state.guias_trafego_db = pd.concat([st.session_state.guias_trafego_db, pd.DataFrame([nova_gt])], ignore_index=True)
 
 def atualizar_validade_guia_supabase(guia_id, nova_validade):
     if supabase:
         supabase.table("guias_trafego").update({"validade": nova_validade}).eq("id", guia_id).execute()
-    else:
-        idx = st.session_state.guias_trafego_db[st.session_state.guias_trafego_db["id"] == guia_id].index
-        if not idx.empty:
-            st.session_state.guias_trafego_db.loc[idx, "validade"] = nova_validade
+
+# Funções de Supabase para Processos Lançados
+def buscar_processos_supabase():
+    if supabase:
+        res = supabase.table("processos_lancados").select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=[
+            "id", "colaborador", "cliente_nome", "cidade", "numero_processo", "servico", 
+            "valor_comissao", "tipo_processo", "data_envio", "mes_referencia", "comissao_devida", "comprovante"
+        ])
+    return pd.DataFrame(columns=[
+        "id", "colaborador", "cliente_nome", "cidade", "numero_processo", "servico", 
+        "valor_comissao", "tipo_processo", "data_envio", "mes_referencia", "comissao_devida", "comprovante"
+    ])
+
+def salvar_processo_supabase(dados):
+    if supabase:
+        supabase.table("processos_lancados").insert(dados).execute()
+
+# Funções de Supabase para Agenda
+def buscar_agenda_supabase():
+    if supabase:
+        res = supabase.table("agenda_processos").select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=[
+            "id", "data_cadastro", "cliente_nome", "cidade", "despachante", "tipo_servico", "arma_equipamento", "status", "teste_psicologico", "teste_tiro"
+        ])
+    return pd.DataFrame(columns=[
+        "id", "data_cadastro", "cliente_nome", "cidade", "despachante", "tipo_servico", "arma_equipamento", "status", "teste_psicologico", "teste_tiro"
+    ])
+
+def salvar_agenda_supabase(dados):
+    if supabase:
+        supabase.table("agenda_processos").insert(dados).execute()
+
+def atualizar_status_agenda_supabase(ag_id, novo_status):
+    if supabase:
+        supabase.table("agenda_processos").update({"status": novo_status}).eq("id", ag_id).execute()
+
+def atualizar_agenda_supabase(ag_id, dados):
+    if supabase:
+        supabase.table("agenda_processos").update(dados).eq("id", ag_id).execute()
+
+def excluir_agenda_supabase(ag_id):
+    if supabase:
+        supabase.table("agenda_processos").delete().eq("id", ag_id).execute()
 
 # ==========================================
 # CATÁLOGO DE SERVIÇOS E SESSÕES
@@ -207,17 +228,6 @@ if "servicos_catalogo" not in st.session_state:
         {"servico": "Emissão / Renovação de GT (Fixo)", "comissao": 5.00},
         {"servico": "Transferência de Arma (SIGMA/SINARM)", "comissao": 120.00}
     ]
-
-if "processos_lancados" not in st.session_state:
-    st.session_state.processos_lancados = pd.DataFrame(columns=[
-        "id", "colaborador", "cliente_nome", "cidade", "numero_processo", "servico", 
-        "valor_comissao", "tipo_processo", "data_envio", "mes_referencia", "comissao_devida", "comprovante"
-    ])
-
-if "agenda_processos" not in st.session_state:
-    st.session_state.agenda_processos = pd.DataFrame(columns=[
-        "id", "data_cadastro", "cliente_nome", "cidade", "despachante", "tipo_servico", "arma_equipamento", "status", "teste_psicologico", "teste_tiro"
-    ])
 
 if "usuario_logado" not in st.session_state:
     st.session_state.usuario_logado = None
@@ -477,12 +487,12 @@ elif menu_selecionado == "🏙️ Clientes por Cidade":
 # ------------------------------------------
 elif menu_selecionado == "💰 Gestão de Comissões & Processos":
     mes_atual = datetime.now().strftime("%Y-%m")
+    df_proc = buscar_processos_supabase()
 
     if perfil in ["Master", "Gestor"]:
         st.header(f"👑 Painel da Administração ({perfil}) - Controle de Comissões")
         st.subheader(f"1. Resumo da Equipe no Mês ({mes_atual})")
         
-        df_proc = st.session_state.processos_lancados
         df_mes = df_proc[df_proc["mes_referencia"] == mes_atual] if not df_proc.empty else df_proc
         
         colaboradores_com_comissao = [
@@ -527,8 +537,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
 
     if perfil == "Colaborador":
         st.header(f"📌 Painel do Colaborador: {colaborador_atual}")
-        df_proc_geral = st.session_state.processos_lancados
-        df_meus_processos = df_proc_geral[(df_proc_geral["colaborador"] == colaborador_atual) & (df_proc_geral["mes_referencia"] == mes_atual)] if not df_proc_geral.empty else pd.DataFrame()
+        df_meus_processos = df_proc[(df_proc["colaborador"] == colaborador_atual) & (df_proc["mes_referencia"] == mes_atual)] if not df_proc.empty else pd.DataFrame()
         
         if gera_comissao_atual:
             total_comissao_meu = df_meus_processos["comissao_devida"].sum() if not df_meus_processos.empty else 0.0
@@ -589,7 +598,6 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
         with col_mp1:
             if st.button("✅ OK, Confirmar Lançamento", key="btn_conf_proc_ok", use_container_width=True):
                 novo_p = {
-                    "id": len(st.session_state.processos_lancados) + 1,
                     "colaborador": tp["colaborador"],
                     "cliente_nome": tp["cliente_nome"],
                     "cidade": tp["cidade"],
@@ -602,15 +610,13 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
                     "comissao_devida": tp["comissao_devida"],
                     "comprovante": tp["comprovante"]
                 }
-                st.session_state.processos_lancados = pd.concat([st.session_state.processos_lancados, pd.DataFrame([novo_p])], ignore_index=True)
+                salvar_processo_supabase(novo_p)
                 
                 if tp["id_agendamento"]:
-                    idx_target = st.session_state.agenda_processos[st.session_state.agenda_processos["id"] == tp["id_agendamento"]].index
-                    if not idx_target.empty:
-                        st.session_state.agenda_processos.loc[idx_target, "status"] = "Concluído"
+                    atualizar_status_agenda_supabase(tp["id_agendamento"], "Concluído")
                 
                 del st.session_state.temp_novo_processo
-                st.success("Processo registrado com sucesso!")
+                st.success("Processo registrado com sucesso na nuvem!")
                 st.rerun()
         with col_mp2:
             if st.button("❌ Cancelar", key="btn_canc_proc_ok", use_container_width=True):
@@ -618,7 +624,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
                 st.rerun()
         st.divider()
 
-    df_ag = st.session_state.agenda_processos
+    df_ag = buscar_agenda_supabase()
     
     if not df_ag.empty:
         df_ag_sem_gt = df_ag[~df_ag["tipo_servico"].str.contains("Guia de Tráfego", case=False)]
@@ -754,7 +760,6 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                     val_gt_com = 5.00 if colab_gt_com else 0.00
                     
                     novo_proc_gt = {
-                        "id": len(st.session_state.processos_lancados) + 1,
                         "colaborador": tg["colaborador"],
                         "cliente_nome": tg["cliente_nome"],
                         "cidade": tg["cidade"],
@@ -767,12 +772,10 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                         "comissao_devida": val_gt_com,
                         "comprovante": "Sistema (Fixo GT)"
                     }
-                    st.session_state.processos_lancados = pd.concat([st.session_state.processos_lancados, pd.DataFrame([novo_proc_gt])], ignore_index=True)
+                    salvar_processo_supabase(novo_proc_gt)
 
                     if tg["id_agendamento"]:
-                        idx_target = st.session_state.agenda_processos[st.session_state.agenda_processos["id"] == tg["id_agendamento"]].index
-                        if not idx_target.empty:
-                            st.session_state.agenda_processos.loc[idx_target, "status"] = "Concluído"
+                        atualizar_status_agenda_supabase(tg["id_agendamento"], "Concluído")
                     
                     del st.session_state.temp_nova_gt
                     st.success("Guia de Tráfego salva com sucesso no banco online!")
@@ -783,7 +786,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                     st.rerun()
             st.divider()
 
-        df_ag = st.session_state.agenda_processos
+        df_ag = buscar_agenda_supabase()
         if perfil in ["Master", "Gestor"]:
             ag_gts = df_ag[(df_ag["status"] == "A Fazer") & (df_ag["tipo_servico"].str.contains("Guia de Tráfego", case=False))] if not df_ag.empty else pd.DataFrame()
         else:
@@ -907,7 +910,6 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                 com_ren_val = 5.00 if info_resp_ren.get("gera_comissao", True) else 0.00
                                 
                                 proc_ren = {
-                                    "id": len(st.session_state.processos_lancados) + 1,
                                     "colaborador": colab_ren_av,
                                     "cliente_nome": r['cliente_nome'],
                                     "cidade": cid_r,
@@ -920,7 +922,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                     "comissao_devida": com_ren_val,
                                     "comprovante": "Sistema (Renovação GT)"
                                 }
-                                st.session_state.processos_lancados = pd.concat([st.session_state.processos_lancados, pd.DataFrame([proc_ren])], ignore_index=True)
+                                salvar_processo_supabase(proc_ren)
                                 
                                 st.success(f"Guia renovada no banco online com sucesso para {colab_ren_av}!")
                                 st.rerun()
@@ -961,7 +963,6 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                 com_ren_val_v = 5.00 if info_resp_ren_v.get("gera_comissao", True) else 0.00
                                 
                                 proc_ren = {
-                                    "id": len(st.session_state.processos_lancados) + 1,
                                     "colaborador": colab_ren_v,
                                     "cliente_nome": r['cliente_nome'],
                                     "cidade": cid_r,
@@ -974,7 +975,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                     "comissao_devida": com_ren_val_v,
                                     "comprovante": "Sistema (Renovação GT)"
                                 }
-                                st.session_state.processos_lancados = pd.concat([st.session_state.processos_lancados, pd.DataFrame([proc_ren])], ignore_index=True)
+                                salvar_processo_supabase(proc_ren)
                                 
                                 st.success(f"Guia renovada no banco online com sucesso para {colab_ren_v}!")
                                 st.rerun()
@@ -1010,10 +1011,8 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
             c_ma_esp1, col_ma1, col_ma2, c_ma_esp2 = st.columns([1, 1.2, 1.2, 1])
             with col_ma1:
                 if st.button("✅ OK, Confirmar", key="btn_conf_ag_ok", use_container_width=True):
-                    novo_id_ag = len(st.session_state.agenda_processos) + 1
                     data_cadastro_hoje = datetime.now().strftime("%Y-%m-%d")
                     novo_ag = {
-                        "id": novo_id_ag,
                         "data_cadastro": data_cadastro_hoje,
                         "cliente_nome": ta["cliente_nome"],
                         "cidade": ta["cidade"],
@@ -1024,9 +1023,9 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                         "teste_psicologico": ta["teste_psicologico"],
                         "teste_tiro": ta["teste_tiro"]
                     }
-                    st.session_state.agenda_processos = pd.concat([st.session_state.agenda_processos, pd.DataFrame([novo_ag])], ignore_index=True)
+                    salvar_agenda_supabase(novo_ag)
                     del st.session_state.temp_novo_agendamento
-                    st.success("Agendamento adicionado aos processos A Fazer!")
+                    st.success("Agendamento adicionado aos processos A Fazer na nuvem!")
                     st.rerun()
             with col_ma2:
                 if st.button("❌ Cancelar", key="btn_canc_ag_ok", use_container_width=True):
@@ -1070,7 +1069,7 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
     with col_ag_lists:
         tab_pendentes, tab_feitos = st.tabs(["⏳ Processos A Fazer (Pendentes)", "✅ Processos Feitos (Concluídos)"])
         
-        df_ag = st.session_state.agenda_processos
+        df_ag = buscar_agenda_supabase()
         
         with tab_pendentes:
             st.markdown(f"##### 🎯 Fila de Serviços A Fazer (Visão: **{perfil}**)")
@@ -1112,11 +1111,9 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                         
                         with col_c:
                             if st.button("✅ Concluir", key=f"btn_concluir_{ag_id}", use_container_width=True):
-                                idx_target = st.session_state.agenda_processos[st.session_state.agenda_processos["id"] == ag_id].index
-                                if not idx_target.empty:
-                                    st.session_state.agenda_processos.loc[idx_target, "status"] = "Concluído"
-                                    st.success(f"Processo de {r['cliente_nome']} concluído!")
-                                    st.rerun()
+                                atualizar_status_agenda_supabase(ag_id, "Concluído")
+                                st.success(f"Processo de {r['cliente_nome']} concluído!")
+                                st.rerun()
                                     
                         with col_e:
                             if st.button("✏️ Editar", key=f"btn_edit_abrir_{ag_id}", use_container_width=True):
@@ -1125,11 +1122,9 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                                 
                         with col_x:
                             if st.button("🗑️ Excluir", key=f"btn_exc_{ag_id}", use_container_width=True):
-                                idx_exc = st.session_state.agenda_processos[st.session_state.agenda_processos["id"] == ag_id].index
-                                if not idx_exc.empty:
-                                    st.session_state.agenda_processos = st.session_state.agenda_processos.drop(idx_exc).reset_index(drop=True)
-                                    st.warning(f"Agendamento de {r['cliente_nome']} excluído!")
-                                    st.rerun()
+                                excluir_agenda_supabase(ag_id)
+                                st.warning(f"Agendamento de {r['cliente_nome']} excluído!")
+                                st.rerun()
 
                         if st.session_state.get(f"editando_agenda_{ag_id}", False):
                             with st.form(f"form_editar_linha_{ag_id}"):
@@ -1162,18 +1157,18 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                                     cli_inf_ed = clientes_db_atual[clientes_db_atual["nome"] == e_cli]
                                     nova_cid_ed = cli_inf_ed["cidade"].values[0] if not cli_inf_ed.empty else "Abelardo Luz - SC"
                                     
-                                    idx_up = st.session_state.agenda_processos[st.session_state.agenda_processos["id"] == ag_id].index
-                                    if not idx_up.empty:
-                                        st.session_state.agenda_processos.loc[idx_up, "cliente_nome"] = e_cli
-                                        st.session_state.agenda_processos.loc[idx_up, "cidade"] = nova_cid_ed
-                                        st.session_state.agenda_processos.loc[idx_up, "despachante"] = e_desp
-                                        st.session_state.agenda_processos.loc[idx_up, "tipo_servico"] = e_serv
-                                        st.session_state.agenda_processos.loc[idx_up, "arma_equipamento"] = e_arma
-                                        st.session_state.agenda_processos.loc[idx_up, "teste_psicologico"] = "Sim" if e_psi else "Não"
-                                        st.session_state.agenda_processos.loc[idx_up, "teste_tiro"] = "Sim" if e_tiro else "Não"
-                                        st.session_state[f"editando_agenda_{ag_id}"] = False
-                                        st.success("Agendamento atualizado com sucesso!")
-                                        st.rerun()
+                                    atualizar_agenda_supabase(ag_id, {
+                                        "cliente_nome": e_cli,
+                                        "cidade": nova_cid_ed,
+                                        "despachante": e_desp,
+                                        "tipo_servico": e_serv,
+                                        "arma_equipamento": e_arma,
+                                        "teste_psicologico": "Sim" if e_psi else "Não",
+                                        "teste_tiro": "Sim" if e_tiro else "Não"
+                                    })
+                                    st.session_state[f"editando_agenda_{ag_id}"] = False
+                                    st.success("Agendamento atualizado com sucesso na nuvem!")
+                                    st.rerun()
                 else:
                     st.info(f"Nenhum agendamento pendente em {cidade_agenda_selecionada}.")
             else:
@@ -1375,7 +1370,7 @@ elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", 
     st.header("📊 Relatórios Gerenciais e de Comissões")
     st.caption("Visão consolidada para auditoria de pagamentos, desempenho de colaboradores e movimentação por cidade.")
     
-    df_proc_rel = st.session_state.processos_lancados.copy()
+    df_proc_rel = buscar_processos_supabase()
     
     if not df_proc_rel.empty:
         df_proc_rel["ano"] = pd.to_datetime(df_proc_rel["data_envio"]).dt.year.astype(str)
@@ -1441,9 +1436,9 @@ elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", 
         if not df_filtrado.empty:
             resumo_cidade = df_filtrado.groupby("cidade").agg(
                 Total_Processos=("id", "count"),
-                Comissao_Movimentada=("comissao_devida", "sum")
+                Comiss_Movimentada=("comissao_devida", "sum")
             ).reset_index()
-            resumo_cidade["Comissao_Movimentada"] = resumo_cidade["Comissao_Movimentada"].apply(lambda x: f"R$ {x:.2f}")
+            resumo_cidade["Comiss_Movimentada"] = resumo_cidade["Comiss_Movimentada"].apply(lambda x: f"R$ {x:.2f}")
             resumo_cidade.columns = ["Cidade", "Total de Processos", "Valor Total Movimentado"]
             st.dataframe(resumo_cidade, use_container_width=True)
         else:
