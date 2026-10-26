@@ -132,10 +132,7 @@ def atualizar_validade_guia_supabase(guia_id, nova_validade):
 
 if "usuarios_db" not in st.session_state:
     st.session_state.usuarios_db = {
-        "Klaiton": {"senha": "134679", "nome": "Klaiton (Master)", "perfil": "Master", "gera_comissao": True},
-        "admin": {"senha": "123", "nome": "Gestor Geral", "perfil": "Gestor", "gera_comissao": True},
-        "joao": {"senha": "123", "nome": "João Silva", "perfil": "Colaborador", "gera_comissao": True},
-        "maria": {"senha": "123", "nome": "Maria Oliveira", "perfil": "Colaborador", "gera_comissao": False}
+        "Klaiton": {"senha": "134679", "nome": "Klaiton (Master)", "perfil": "Master", "gera_comissao": True}
     }
 
 if "clientes_db" not in st.session_state:
@@ -187,7 +184,6 @@ if st.session_state.usuario_logado is None:
             
             if btn_entrar:
                 if usuario_input in st.session_state.usuarios_db and st.session_state.usuarios_db[usuario_input]["senha"] == senha_input:
-                    # Guardar a chave de login atual no objeto da sessão para referência de edição/senha
                     user_data = st.session_state.usuarios_db[usuario_input].copy()
                     user_data["login_chave"] = usuario_input
                     st.session_state.usuario_logado = user_data
@@ -245,7 +241,6 @@ with st.sidebar:
             
     st.divider()
     
-    # Botão rápido para colaborador ou qualquer usuário alterar a própria senha
     if st.button("🔑 Alterar Minha Senha", use_container_width=True):
         st.session_state.menu_ativo = "🔑 Alterar Minha Senha"
         st.rerun()
@@ -1229,7 +1224,6 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
             nu_nome = st.text_input("Nome Completo")
             nu_senha = st.text_input("Senha", type="password")
             
-            # Gestor pode cadastrar Colaboradores e Gestores. Master pode cadastrar Master, Gestor e Colaborador.
             perfis_cadastro = ["Colaborador", "Gestor"]
             if perfil == "Master":
                 perfis_cadastro.append("Master")
@@ -1256,7 +1250,6 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
         st.markdown("###### 📋 Lista de Usuários Cadastrados (Editar Login/Senha / Excluir)")
         
         for login_k, u_val in list(st.session_state.usuarios_db.items()):
-            # Se for Gestor, não pode gerenciar usuários com perfil Master
             if perfil == "Gestor" and u_val["perfil"] == "Master":
                 continue
                 
@@ -1269,7 +1262,6 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
                     st.session_state[f"edit_u_{login_k}"] = not st.session_state.get(f"edit_u_{login_k}", False)
                     st.rerun()
             with c_u3:
-                # Evitar que o usuário exclua a si mesmo
                 if login_k != login_atual:
                     if st.button("🗑️ Excluir", key=f"btn_exc_u_{login_k}"):
                         del st.session_state.usuarios_db[login_k]
@@ -1301,7 +1293,6 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
                         elif ed_novo_login_limpo != login_k and ed_novo_login_limpo in st.session_state.usuarios_db:
                             st.error("Este novo login já está sendo usado por outro usuário.")
                         else:
-                            # Se o login mudou, remover a chave antiga e criar a nova
                             if ed_novo_login_limpo != login_k:
                                 st.session_state.usuarios_db[ed_novo_login_limpo] = {
                                     "senha": ed_u_senha,
@@ -1341,7 +1332,7 @@ elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", 
             ano_escolhido = st.selectbox("📅 Filtrar por Ano:", ["Todos os Anos"] + anos_disponiveis)
         with col_rf2:
             meses_disponiveis = sorted(df_proc_rel["mes_referencia"].unique().tolist(), reverse=True)
-            mes_escolhido = st.selectbox("📆 Filtrar por Mês:", ["Todos os Meses"] + meses_disponiveis)
+            mes_escolhido = st.selectbox("📆 Filtrar por Mês:", ["Todos los Meses" if 'Meses' in 'Todos os Meses' else "Todos os Meses"] + meses_disponiveis)
         with col_rf3:
             cidades_disponiveis = sorted(df_proc_rel["cidade"].unique().tolist())
             cidade_escolhida = st.selectbox("🏙️ Filtrar por Cidade:", ["Todas as Cidades"] + cidades_disponiveis)
