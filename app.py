@@ -106,36 +106,52 @@ supabase = init_supabase()
 # Funções de Supabase para Clientes
 def buscar_clientes_supabase():
     if supabase:
-        res = supabase.table("clientes").select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"])
+        try:
+            res = supabase.table("clientes").select("*").execute()
+            if res.data:
+                return pd.DataFrame(res.data)
+        except Exception as e:
+            st.error(f"Erro ao buscar clientes: {e}")
     return pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"])
 
 def salvar_cliente_supabase(dados):
     if supabase:
-        supabase.table("clientes").insert(dados).execute()
+        try:
+            supabase.table("clientes").insert(dados).execute()
+        except Exception as e:
+            st.error(f"Erro ao salvar cliente: {e}")
 
 def atualizar_cliente_supabase(cli_id, dados):
     if supabase:
-        supabase.table("clientes").update(dados).eq("id", cli_id).execute()
+        try:
+            supabase.table("clientes").update(dados).eq("id", cli_id).execute()
+        except Exception as e:
+            st.error(f"Erro ao atualizar cliente: {e}")
 
 def excluir_cliente_supabase(cli_id):
     if supabase:
-        supabase.table("clientes").delete().eq("id", cli_id).execute()
+        try:
+            supabase.table("clientes").delete().eq("id", cli_id).execute()
+        except Exception as e:
+            st.error(f"Erro ao excluir cliente: {e}")
 
 # Funções de Supabase para Usuários
 def buscar_usuarios_supabase():
     if supabase:
-        res = supabase.table("usuarios").select("*").execute()
-        if res.data:
-            dic = {}
-            for row in res.data:
-                dic[row["login"]] = {
-                    "senha": row["senha"],
-                    "nome": row["nome"],
-                    "perfil": row["perfil"],
-                    "gera_comissao": row["gera_comissao"]
-                }
-            return dic
+        try:
+            res = supabase.table("usuarios").select("*").execute()
+            if res.data:
+                dic = {}
+                for row in res.data:
+                    dic[row["login"]] = {
+                        "senha": row["senha"],
+                        "nome": row["nome"],
+                        "perfil": row["perfil"],
+                        "gera_comissao": row["gera_comissao"]
+                    }
+                return dic
+        except Exception as e:
+            st.error(f"Erro ao buscar usuários: {e}")
     return {
         "Klaiton": {"senha": "134679", "nome": "Klaiton (Master)", "perfil": "Master", "gera_comissao": True}
     }
@@ -144,46 +160,62 @@ def salvar_usuario_supabase(login, dados):
     if supabase:
         try:
             payload = {"login": login, **dados}
-            res = supabase.table("usuarios").insert(payload).execute()
-            st.success("Usuário salvo com sucesso na nuvem!")
+            supabase.table("usuarios").insert(payload).execute()
         except Exception as e:
-            st.error(f"Erro detalhado do Supabase: {e}")
+            st.error(f"Erro ao salvar usuário: {e}")
 
 def atualizar_usuario_supabase(login_antigo, login_novo, dados):
     if supabase:
-        if login_antigo != login_novo:
-            supabase.table("usuarios").delete().eq("login", login_antigo).execute()
-            supabase.table("usuarios").insert({"login": login_novo, **dados}).execute()
-        else:
-            supabase.table("usuarios").update(dados).eq("login", login_antigo).execute()
+        try:
+            if login_antigo != login_novo:
+                supabase.table("usuarios").delete().eq("login", login_antigo).execute()
+                supabase.table("usuarios").insert({"login": login_novo, **dados}).execute()
+            else:
+                supabase.table("usuarios").update(dados).eq("login", login_antigo).execute()
+        except Exception as e:
+            st.error(f"Erro ao atualizar usuário: {e}")
 
 def excluir_usuario_supabase(login):
     if supabase:
-        supabase.table("usuarios").delete().eq("login", login).execute()
+        try:
+            supabase.table("usuarios").delete().eq("login", login).execute()
+        except Exception as e:
+            st.error(f"Erro ao excluir usuário: {e}")
 
 # Funções de Supabase para Guias de Tráfego
 def buscar_guias_supabase():
     if supabase:
-        res = supabase.table("guias_trafego").select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+        try:
+            res = supabase.table("guias_trafego").select("*").execute()
+            if res.data:
+                return pd.DataFrame(res.data)
+        except Exception as e:
+            st.error(f"Erro ao buscar guias: {e}")
     return pd.DataFrame()
 
 def salvar_guia_supabase(dados_guia):
     if supabase:
-        supabase.table("guias_trafego").insert(dados_guia).execute()
+        try:
+            supabase.table("guias_trafego").insert(dados_guia).execute()
+        except Exception as e:
+            st.error(f"Erro ao salvar guia: {e}")
 
 def atualizar_validade_guia_supabase(guia_id, nova_validade):
     if supabase:
-        supabase.table("guias_trafego").update({"validade": nova_validade}).eq("id", guia_id).execute()
+        try:
+            supabase.table("guias_trafego").update({"validade": nova_validade}).eq("id", guia_id).execute()
+        except Exception as e:
+            st.error(f"Erro ao atualizar validade da guia: {e}")
 
 # Funções de Supabase para Processos Lançados
 def buscar_processos_supabase():
     if supabase:
-        res = supabase.table("processos_lancados").select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=[
-            "id", "colaborador", "cliente_nome", "cidade", "numero_processo", "servico", 
-            "valor_comissao", "tipo_processo", "data_envio", "mes_referencia", "comissao_devida", "comprovante"
-        ])
+        try:
+            res = supabase.table("processos_lancados").select("*").execute()
+            if res.data:
+                return pd.DataFrame(res.data)
+        except Exception as e:
+            st.error(f"Erro ao buscar processos: {e}")
     return pd.DataFrame(columns=[
         "id", "colaborador", "cliente_nome", "cidade", "numero_processo", "servico", 
         "valor_comissao", "tipo_processo", "data_envio", "mes_referencia", "comissao_devida", "comprovante"
@@ -191,34 +223,51 @@ def buscar_processos_supabase():
 
 def salvar_processo_supabase(dados):
     if supabase:
-        supabase.table("processos_lancados").insert(dados).execute()
+        try:
+            supabase.table("processos_lancados").insert(dados).execute()
+        except Exception as e:
+            st.error(f"Erro ao salvar processo: {e}")
 
 # Funções de Supabase para Agenda
 def buscar_agenda_supabase():
     if supabase:
-        res = supabase.table("agenda_processos").select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=[
-            "id", "data_cadastro", "cliente_nome", "cidade", "despachante", "tipo_servico", "arma_equipamento", "status", "teste_psicologico", "teste_tiro"
-        ])
+        try:
+            res = supabase.table("agenda_processos").select("*").execute()
+            if res.data:
+                return pd.DataFrame(res.data)
+        except Exception as e:
+            st.error(f"Erro ao buscar agenda: {e}")
     return pd.DataFrame(columns=[
         "id", "data_cadastro", "cliente_nome", "cidade", "despachante", "tipo_servico", "arma_equipamento", "status", "teste_psicologico", "teste_tiro"
     ])
 
 def salvar_agenda_supabase(dados):
     if supabase:
-        supabase.table("agenda_processos").insert(dados).execute()
+        try:
+            supabase.table("agenda_processos").insert(dados).execute()
+        except Exception as e:
+            st.error(f"Erro ao salvar agendamento: {e}")
 
 def atualizar_status_agenda_supabase(ag_id, novo_status):
     if supabase:
-        supabase.table("agenda_processos").update({"status": novo_status}).eq("id", ag_id).execute()
+        try:
+            supabase.table("agenda_processos").update({"status": novo_status}).eq("id", ag_id).execute()
+        except Exception as e:
+            st.error(f"Erro ao atualizar status da agenda: {e}")
 
 def atualizar_agenda_supabase(ag_id, dados):
     if supabase:
-        supabase.table("agenda_processos").update(dados).eq("id", ag_id).execute()
+        try:
+            supabase.table("agenda_processos").update(dados).eq("id", ag_id).execute()
+        except Exception as e:
+            st.error(f"Erro ao atualizar agenda: {e}")
 
 def excluir_agenda_supabase(ag_id):
     if supabase:
-        supabase.table("agenda_processos").delete().eq("id", ag_id).execute()
+        try:
+            supabase.table("agenda_processos").delete().eq("id", ag_id).execute()
+        except Exception as e:
+            st.error(f"Erro ao excluir agendamento: {e}")
 
 # ==========================================
 # CATÁLOGO DE SERVIÇOS E SESSÕES
