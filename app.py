@@ -231,6 +231,10 @@ with st.sidebar:
         st.rerun()
         
     if perfil in ["Master", "Gestor"]:
+        if st.button("⚙️ Serviços & Equipe", use_container_width=True):
+            st.session_state.menu_ativo = "⚙️ Serviços & Equipe"
+            st.rerun()
+
         if st.button("📊 Relatórios Gerenciais", use_container_width=True):
             st.session_state.menu_ativo = "📊 Relatórios Gerenciais"
             st.rerun()
@@ -640,87 +644,6 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
                     "id_agendamento": id_agendado_capturado
                 }
                 st.rerun()
-
-    if perfil in ["Master", "Gestor"]:
-        st.divider()
-        st.subheader("4. Administração de Serviços e Equipe")
-        sub1, sub2 = st.tabs(["⚙️ Cadastrar/Editar Serviços", "👥 Gerenciar Usuários"])
-        
-        with sub1:
-            col_s1, col_s2 = st.columns(2)
-            with col_s1:
-                st.markdown("##### ➕ Criar Novo Serviço")
-                with st.form("form_add_servico", clear_on_submit=True):
-                    n_serv = st.text_input("Nome do Serviço")
-                    v_com = st.number_input("Valor da Comissão (R$)", min_value=0.0, value=50.0, step=10.0)
-                    if st.form_submit_button("Adicionar Serviço"):
-                        if n_serv:
-                            st.session_state.servicos_catalogo.append({"servico": n_serv, "comissao": v_com})
-                            st.success(f"Serviço '{n_serv}' cadastrado!")
-                            st.rerun()
-
-            with col_s2:
-                st.markdown("##### ✏️ Editar / ❌ Excluir Serviço")
-                if st.session_state.servicos_catalogo:
-                    lista_s_nomes = [s["servico"] for s in st.session_state.servicos_catalogo]
-                    serv_selecionado = st.selectbox("Selecione o Serviço", lista_s_nomes)
-                    idx_s = next((i for i, item in enumerate(st.session_state.servicos_catalogo) if item["servico"] == serv_selecionado), None)
-                    if idx_s is not None:
-                        serv_obj = st.session_state.servicos_catalogo[idx_s]
-                        novo_nome_s = st.text_input("Editar Nome", value=serv_obj["servico"])
-                        novo_val_s = st.number_input("Editar Comissão (R$)", value=float(serv_obj["comissao"]), min_value=0.0, step=10.0)
-                        col_btn_ed, col_btn_ex = st.columns(2)
-                        with col_btn_ed:
-                            if st.button("💾 Salvar"):
-                                st.session_state.servicos_catalogo[idx_s] = {"servico": novo_nome_s, "comissao": novo_val_s}
-                                st.success("Atualizado!")
-                                st.rerun()
-                        with col_btn_ex:
-                            if st.button("❌ Excluir"):
-                                st.session_state.servicos_catalogo.pop(idx_s)
-                                st.warning("Removido!")
-                                st.rerun()
-            st.divider()
-            st.dataframe(pd.DataFrame(st.session_state.servicos_catalogo), use_container_width=True)
-
-        with sub2:
-            st.markdown(f"##### 👥 Gerenciamento de Usuários & Regras de Comissão")
-            
-            with st.form("form_novo_usuario", clear_on_submit=True):
-                st.markdown("##### Adicionar Novo Usuário")
-                nu_user = st.text_input("Login (Usuário)")
-                nu_nome = st.text_input("Nome Completo")
-                nu_senha = st.text_input("Senha", type="password")
-                nu_perfil = st.selectbox("Perfil de Acesso", ["Colaborador", "Gestor", "Master"])
-                nu_gera_com = st.checkbox("Gera Comissões Financeiras?", value=True)
-                
-                if st.form_submit_button("Cadastrar Usuário"):
-                    if nu_user and nu_nome and nu_senha:
-                        if nu_user in st.session_state.usuarios_db:
-                            st.error("Este login já existe.")
-                        else:
-                            st.session_state.usuarios_db[nu_user] = {
-                                "senha": nu_senha,
-                                "nome": nu_nome,
-                                "perfil": nu_perfil,
-                                "gera_comissao": nu_gera_com
-                            }
-                            st.success(f"Usuário {nu_nome} cadastrado com sucesso!")
-                            st.rerun()
-                    else:
-                        st.error("Preencha todos os campos obrigatórios.")
-            
-            st.divider()
-            
-            tabela_usuarios_dados = []
-            for k, v in st.session_state.usuarios_db.items():
-                tabela_usuarios_dados.append({
-                    "Login": k,
-                    "Nome": v["nome"],
-                    "Perfil": v["perfil"],
-                    "Gera Comissão?": "Sim" if v.get("gera_comissao", True) else "Não (Apenas Produção)"
-                })
-            st.dataframe(pd.DataFrame(tabela_usuarios_dados), use_container_width=True)
 
 # ------------------------------------------
 # SEÇÃO 4: GUIAS DE TRÁFEGO (CONECTADA AO SUPABASE)
@@ -1212,7 +1135,131 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                 st.info("Nenhum processo concluído no histórico.")
 
 # ------------------------------------------
-# SEÇÃO 6: RELATÓRIOS GERENCIAIS (MASTER / GESTOR)
+# SEÇÃO 6: SERVIÇOS & EQUIPE (ADMINISTRAÇÃO)
+# ------------------------------------------
+elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "Gestor"]:
+    st.header("⚙️ Administração de Serviços e Equipe")
+    st.caption("Gerencie o catálogo de serviços/comissões e a equipe de Gestores e Colaboradores.")
+    
+    sub_tab1, sub_tab2 = st.tabs(["⚙️ Catálogo de Serviços", "👥 Gestão de Equipe (Gestores e Colaboradores)"])
+    
+    with sub_tab1:
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            st.markdown("##### ➕ Criar Novo Serviço")
+            with st.form("form_add_servico", clear_on_submit=True):
+                n_serv = st.text_input("Nome do Serviço")
+                v_com = st.number_input("Valor da Comissão (R$)", min_value=0.0, value=50.0, step=10.0)
+                if st.form_submit_button("Adicionar Serviço"):
+                    if n_serv:
+                        st.session_state.servicos_catalogo.append({"servico": n_serv, "comissao": v_com})
+                        st.success(f"Serviço '{n_serv}' cadastrado!")
+                        st.rerun()
+
+        with col_s2:
+            st.markdown("##### ✏️ Editar / ❌ Excluir Serviço")
+            if st.session_state.servicos_catalogo:
+                lista_s_nomes = [s["servico"] for s in st.session_state.servicos_catalogo]
+                serv_selecionado = st.selectbox("Selecione o Serviço", lista_s_nomes)
+                idx_s = next((i for i, item in enumerate(st.session_state.servicos_catalogo) if item["servico"] == serv_selecionado), None)
+                if idx_s is not None:
+                    serv_obj = st.session_state.servicos_catalogo[idx_s]
+                    novo_nome_s = st.text_input("Editar Nome", value=serv_obj["servico"])
+                    novo_val_s = st.number_input("Editar Comissão (R$)", value=float(serv_obj["comissao"]), min_value=0.0, step=10.0)
+                    col_btn_ed, col_btn_ex = st.columns(2)
+                    with col_btn_ed:
+                        if st.button("💾 Salvar Alterações"):
+                            st.session_state.servicos_catalogo[idx_s] = {"servico": novo_nome_s, "comissao": novo_val_s}
+                            st.success("Serviço atualizado com sucesso!")
+                            st.rerun()
+                    with col_btn_ex:
+                        if st.button("❌ Excluir Serviço"):
+                            st.session_state.servicos_catalogo.pop(idx_s)
+                            st.warning("Serviço removido!")
+                            st.rerun()
+        st.divider()
+        st.dataframe(pd.DataFrame(st.session_state.servicos_catalogo), use_container_width=True)
+
+    with sub_tab2:
+        st.markdown("##### 👥 Cadastro e Gerenciamento de Usuários")
+        
+        with st.form("form_novo_usuario", clear_on_submit=True):
+            st.markdown("###### Adicionar Novo Colaborador ou Gestor")
+            nu_user = st.text_input("Login (Usuário)")
+            nu_nome = st.text_input("Nome Completo")
+            nu_senha = st.text_input("Senha", type="password")
+            nu_perfil = st.selectbox("Perfil de Acesso", ["Colaborador", "Gestor"])
+            nu_gera_com = st.checkbox("Gera Comissões Financeiras?", value=True)
+            
+            if st.form_submit_button("Cadastrar Usuário"):
+                if nu_user and nu_nome and nu_senha:
+                    if nu_user in st.session_state.usuarios_db:
+                        st.error("Este login já existe.")
+                    else:
+                        st.session_state.usuarios_db[nu_user] = {
+                            "senha": nu_senha,
+                            "nome": nu_nome,
+                            "perfil": nu_perfil,
+                            "gera_comissao": nu_gera_com
+                        }
+                        st.success(f"Usuário {nu_nome} cadastrado com sucesso!")
+                        st.rerun()
+                else:
+                    st.error("Preencha todos os campos obrigatórios.")
+        
+        st.divider()
+        st.markdown("###### 📋 Lista de Usuários Cadastrados (Editar / Excluir)")
+        
+        for login_k, u_val in list(st.session_state.usuarios_db.items()):
+            # Permitir gerenciar gestores e colaboradores (e Master se for Master)
+            if perfil == "Gestor" and u_val["perfil"] == "Master":
+                continue
+                
+            c_u1, c_u2, c_u3 = st.columns([4, 1, 1])
+            with c_u1:
+                comissao_status = "Com Comissão" if u_val.get("gera_comissao", True) else "Sem Comissão"
+                st.markdown(f"👤 **{u_val['nome']}** (Login: `{login_k}`) | Perfil: **{u_val['perfil']}** | {comissao_status}")
+            with c_u2:
+                if st.button("✏️ Editar", key=f"btn_edit_u_{login_k}"):
+                    st.session_state[f"edit_u_{login_k}"] = not st.session_state.get(f"edit_u_{login_k}", False)
+                    st.rerun()
+            with c_u3:
+                if login_k != user_info["nome"] and login_k != "Klaiton":
+                    if st.button("🗑️ Excluir", key=f"btn_exc_u_{login_k}"):
+                        del st.session_state.usuarios_db[login_k]
+                        st.warning(f"Usuário {u_val['nome']} removido!")
+                        st.rerun()
+                else:
+                    st.caption("Protegido")
+
+            if st.session_state.get(f"edit_u_{login_k}", False):
+                with st.form(f"form_ed_u_{login_k}"):
+                    st.markdown(f"**Editando Usuário: {u_val['nome']}**")
+                    ed_u_nome = st.text_input("Nome Completo", value=u_val["nome"], key=f"ed_nome_{login_k}")
+                    ed_u_senha = st.text_input("Nova Senha", value=u_val["senha"], type="password", key=f"ed_senha_{login_k}")
+                    
+                    perfis_op = ["Colaborador", "Gestor"]
+                    if perfil == "Master":
+                        perfis_op.append("Master")
+                    
+                    idx_p = perfis_op.index(u_val["perfil"]) if u_val["perfil"] in perfis_op else 0
+                    ed_u_perfil = st.selectbox("Perfil", perfis_op, index=idx_p, key=f"ed_perf_{login_k}")
+                    ed_u_com = st.checkbox("Gera Comissões?", value=u_val.get("gera_comissao", True), key=f"ed_com_{login_k}")
+                    
+                    if st.form_submit_button("💾 Salvar Alterações"):
+                        st.session_state.usuarios_db[login_k] = {
+                            "senha": ed_u_senha,
+                            "nome": ed_u_nome,
+                            "perfil": ed_u_perfil,
+                            "gera_comissao": ed_u_com
+                        }
+                        st.session_state[f"edit_u_{login_k}"] = False
+                        st.success("Usuário atualizado com sucesso!")
+                        st.rerun()
+            st.markdown("---")
+
+# ------------------------------------------
+# SEÇÃO 7: RELATÓRIOS GERENCIAIS (MASTER / GESTOR)
 # ------------------------------------------
 elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", "Gestor"]:
     st.header("📊 Relatórios Gerenciais e de Comissões")
@@ -1297,3 +1344,5 @@ elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", 
             st.dataframe(df_filtrado[["data_envio", "colaborador", "cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "comissao_devida"]], use_container_width=True)
         else:
             st.info("Nenhum processo na listagem detalhada.")
+    else:
+        st.info("Nenhum processo lançado no sistema para gerar relatórios.")
