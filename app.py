@@ -167,16 +167,58 @@ def excluir_usuario_supabase(login):
         except Exception as e:
             st.error(f"Erro ao excluir usuário: {e}")
 
+# Funções de Supabase para Catálogo de Serviços
+def buscar_servicos_supabase():
+    if supabase:
+        try:
+            res = supabase.table("servicos_catalogo").select("*").execute()
+            if res.data:
+                return res.data
+        except Exception as e:
+            st.error(f"Erro ao buscar serviços: {e}")
+    return [
+        {"servico": "Concessão de CR", "comissao": 150.00},
+        {"servico": "Renovação de CR", "comissao": 80.00},
+        {"servico": "Apostilamento de PCE (Prensa/Dies)", "comissao": 100.00},
+        {"servico": "Guia de Tráfego Eletrônica", "comissao": 40.00},
+        {"servico": "Emissão / Renovação de GT (Fixo)", "comissao": 5.00},
+        {"servico": "Transferência de Arma (SIGMA/SINARM)", "comissao": 120.00}
+    ]
+
+def salvar_servico_supabase(servico, comissao):
+    if supabase:
+        try:
+            supabase.table("servicos_catalogo").insert({"servico": servico, "comissao": comissao}).execute()
+        except Exception as e:
+            st.error(f"Erro ao salvar serviço: {e}")
+
+def atualizar_servico_supabase(servico_antigo, novo_servico, nova_comissao):
+    if supabase:
+        try:
+            supabase.table("servicos_catalogo").update({"servico": novo_servico, "comissao": nova_comissao}).eq("servico", servico_antigo).execute()
+        except Exception as e:
+            st.error(f"Erro ao atualizar serviço: {e}")
+
+def excluir_servico_supabase(servico):
+    if supabase:
+        try:
+            supabase.table("servicos_catalogo").delete().eq("servico", servico).execute()
+        except Exception as e:
+            st.error(f"Erro ao excluir serviço: {e}")
+
 # Funções de Supabase para Guias de Tráfego
 def buscar_guias_supabase():
     if supabase:
         try:
             res = supabase.table("guias_trafego").select("*").execute()
             if res.data:
-                return pd.DataFrame(res.data)
+                df = pd.DataFrame(res.data)
+                if "cidade" not in df.columns:
+                    df["cidade"] = "Abelardo Luz - SC"
+                return df
         except Exception as e:
             st.error(f"Erro ao buscar guias: {e}")
-    return pd.DataFrame()
+    return pd.DataFrame(columns=["id", "cliente_nome", "cr", "equipamento", "validade", "telefone", "cidade"])
 
 def salvar_guia_supabase(dados_guia):
     if supabase:
@@ -185,12 +227,19 @@ def salvar_guia_supabase(dados_guia):
         except Exception as e:
             st.error(f"Erro ao salvar guia: {e}")
 
-def atualizar_validade_guia_supabase(guia_id, nova_validade):
+def atualizar_guia_supabase(guia_id, dados):
     if supabase:
         try:
-            supabase.table("guias_trafego").update({"validade": nova_validade}).eq("id", guia_id).execute()
+            supabase.table("guias_trafego").update(dados).eq("id", guia_id).execute()
         except Exception as e:
-            st.error(f"Erro ao atualizar validade da guia: {e}")
+            st.error(f"Erro ao atualizar guia: {e}")
+
+def excluir_guia_supabase(guia_id):
+    if supabase:
+        try:
+            supabase.table("guias_trafego").delete().eq("id", guia_id).execute()
+        except Exception as e:
+            st.error(f"Erro ao excluir guia: {e}")
 
 # Funções de Supabase para Processos Lançados
 def buscar_processos_supabase():
@@ -255,17 +304,9 @@ def excluir_agenda_supabase(ag_id):
             st.error(f"Erro ao excluir agendamento: {e}")
 
 # ==========================================
-# CATÁLOGO DE SERVIÇOS E SESSÕES
+# CATÁLOGO DE SERVIÇOS & SESSÕES
 # ==========================================
-if "servicos_catalogo" not in st.session_state:
-    st.session_state.servicos_catalogo = [
-        {"servico": "Concessão de CR", "comissao": 150.00},
-        {"servico": "Renovação de CR", "comissao": 80.00},
-        {"servico": "Apostilamento de PCE (Prensa/Dies)", "comissao": 100.00},
-        {"servico": "Guia de Tráfego Eletrônica", "comissao": 40.00},
-        {"servico": "Emissão / Renovação de GT (Fixo)", "comissao": 5.00},
-        {"servico": "Transferência de Arma (SIGMA/SINARM)", "comissao": 120.00}
-    ]
+servicos_catalogo_atual = buscar_servicos_supabase()
 
 if "usuario_logado" not in st.session_state:
     st.session_state.usuario_logado = None
@@ -393,6 +434,7 @@ if menu_selecionado == "👤 Cadastro Único de Clientes":
                     try:
                         supabase.table("clientes").insert(dados_cliente).execute()
                         st.success(f"Cliente '{c_nome.strip()}' salvo com sucesso na nuvem!")
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao salvar cliente: {e}")
             else:
@@ -693,7 +735,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
             numero_proc = st.text_input("Número do Processo (SISGCORP / PF)")
             
         with f2:
-            nomes_servicos = [s["servico"] for s in st.session_state.servicos_catalogo if "Guia de Tráfego" not in s["servico"]]
+            nomes_servicos = [s["servico"] for s in servicos_catalogo_atual if "Guia de Tráfego" not in s["servico"]]
             idx_serv = nomes_servicos.index(servico_pre) if servico_pre in nomes_servicos else 0
             servico_sel = st.selectbox("Serviço Executado", nomes_servicos if nomes_servicos else ["Nenhum"], index=idx_serv)
             data_envio = st.date_input("Data do Envio", value=datetime.now())
@@ -708,7 +750,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
                 info_resp = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == colaborador_responsavel), ""), {})
                 colab_gera_comissao = info_resp.get("gera_comissao", True)
                 
-                valor_base = next((s["comissao"] for s in st.session_state.servicos_catalogo if s["servico"] == servico_sel), 50.0)
+                valor_base = next((s["comissao"] for s in servicos_catalogo_atual if s["servico"] == servico_sel), 50.0)
                 
                 if colab_gera_comissao:
                     comissao_calc = valor_base if tipo_proc == "Novo Processo" else 0.0
@@ -733,7 +775,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
                 st.rerun()
 
 # ------------------------------------------
-# SEÇÃO 4: GUIAS DE TRÁFEGO
+# SEÇÃO 4: GUIAS DE TRÁFEGO (SEPARADAS POR CIDADES & COM EDIÇÃO/EXCLUSÃO)
 # ------------------------------------------
 elif menu_selecionado == "📜 Guias de Tráfego":
     st.header("📜 Emissão e Gestão de Guias de Tráfego")
@@ -750,6 +792,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                 <h3>⚠️ Confirmação de Emissão de Guia de Tráfego</h3>
                 <p>Atirador: <b>{tg['cliente_nome']}</b><br>
                 Arma: <b>{tg['equipamento']}</b><br>
+                Cidade: <b>{tg['cidade']}</b><br>
                 Colaborador: <b>{tg['colaborador']}</b></p>
             </div>
             """, unsafe_allow_html=True)
@@ -765,7 +808,8 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                         "cr": tg["cr"],
                         "equipamento": tg["equipamento"],
                         "validade": tg["validade"],
-                        "telefone": tg["telefone"]
+                        "telefone": tg["telefone"],
+                        "cidade": tg["cidade"]
                     }
                     salvar_guia_supabase(dados_nova_gt_db)
                     
@@ -841,6 +885,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
             cidade_gt_auto = cr_obj["cidade"].values[0] if not cr_obj.empty else "Abelardo Luz - SC"
             
             st.text_input("CR do Atirador", value=cr_auto, disabled=True)
+            st.info(f"📍 Cidade do Atirador: **{cidade_gt_auto}**")
             gt_arma = st.text_input("Equipamento / Calibre / Nº Série", value=arma_gt_pre)
             gt_validade = st.date_input("Validade da Guia", value=datetime.now() + timedelta(days=365))
             
@@ -861,64 +906,92 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                     st.rerun()
 
     with col_gt2:
-        st.subheader("📊 Painel de Controle de Validade das Guias (Banco Online)")
+        st.subheader("📊 Painel de Guias por Cidade")
         
         df_gts = buscar_guias_supabase()
-        hoje = datetime.now().date()
         
         if not df_gts.empty:
-            df_gts["validade_dt"] = pd.to_datetime(df_gts["validade"]).dt.date
+            cidades_gts = sorted(df_gts["cidade"].unique().tolist())
+            cidade_gt_selecionada = st.selectbox("🏙️ Selecione a Cidade para ver as Guias:", cidades_gts)
             
-            gts_em_dia = df_gts[df_gts["validade_dt"] > (hoje + timedelta(days=15))]
-            gts_a_vencer = df_gts[(df_gts["validade_dt"] >= hoje) & (df_gts["validade_dt"] <= (hoje + timedelta(days=15)))]
-            gts_vencidas = df_gts[df_gts["validade_dt"] < hoje]
+            df_gts_cidade = df_gts[df_gts["cidade"] == cidade_gt_selecionada].copy()
+            hoje = datetime.now().date()
+            df_gts_cidade["validade_dt"] = pd.to_datetime(df_gts_cidade["validade"]).dt.date
+            
+            gts_em_dia = df_gts_cidade[df_gts_cidade["validade_dt"] > (hoje + timedelta(days=15))]
+            gts_a_vencer = df_gts_cidade[(df_gts_cidade["validade_dt"] >= hoje) & (df_gts_cidade["validade_dt"] <= (hoje + timedelta(days=15)))]
+            gts_vencidas = df_gts_cidade[df_gts_cidade["validade_dt"] < hoje]
             
             tab_em_dia, tab_a_vencer, tab_vencidas = st.tabs([
-                f"🟢 Guias em Dia ({len(gts_em_dia)})",
-                f"🟡 A Vencer nos Próximos 15 Dias ({len(gts_a_vencer)})",
-                f"🔴 Guias Vencidas ({len(gts_vencidas)})"
+                f"🟢 Em Dia ({len(gts_em_dia)})",
+                f"🟡 A Vencer ({len(gts_a_vencer)})",
+                f"🔴 Vencidas ({len(gts_vencidas)})"
             ])
             
             with tab_em_dia:
                 if not gts_em_dia.empty:
                     for _, r in gts_em_dia.iterrows():
+                        r_id = r["id"]
                         st.markdown(f"""
-                        <div style="background-color: #c8e6c9; padding: 12px; border-radius: 6px; margin-bottom: 8px; border-left: 6px solid #2e7d32;">
+                        <div style="background-color: #c8e6c9; padding: 10px; border-radius: 6px; margin-bottom: 6px; border-left: 6px solid #2e7d32; font-size: 13px;">
                             <b>Atirador:</b> {r['cliente_nome']} | <b>CR:</b> {r['cr']}<br>
                             <b>Arma:</b> {r['equipamento']} | 📅 <b>Validade:</b> <span style="color: #1b5e20; font-weight: bold;">{r['validade']}</span>
                         </div>
                         """, unsafe_allow_html=True)
+                        
+                        col_ed_g1, col_ed_g2 = st.columns(2)
+                        with col_ed_g1:
+                            if st.button("✏️ Editar Guia", key=f"btn_edit_gt_{r_id}", use_container_width=True):
+                                st.session_state[f"editando_gt_{r_id}"] = not st.session_state.get(f"editando_gt_{r_id}", False)
+                                st.rerun()
+                        with col_ed_g2:
+                            if st.button("🗑️ Excluir Guia", key=f"btn_exc_gt_{r_id}", use_container_width=True):
+                                excluir_guia_supabase(r_id)
+                                st.warning("Guia excluída com sucesso!")
+                                st.rerun()
+
+                        if st.session_state.get(f"editando_gt_{r_id}", False):
+                            with st.form(f"form_ed_gt_{r_id}"):
+                                novo_eq = st.text_input("Equipamento / Calibre", value=r["equipamento"])
+                                nova_val = st.date_input("Nova Validade", value=pd.to_datetime(r["validade"]))
+                                if st.form_submit_button("💾 Salvar Alterações"):
+                                    atualizar_guia_supabase(r_id, {
+                                        "equipamento": novo_eq,
+                                        "validade": nova_val.strftime("%Y-%m-%d")
+                                    })
+                                    st.session_state[f"editando_gt_{r_id}"] = False
+                                    st.success("Guia atualizada com sucesso!")
+                                    st.rerun()
+                        st.markdown("---")
                 else:
-                    st.info("Nenhuma guia em dia no momento.")
+                    st.info(f"Nenhuma guia em dia em {cidade_gt_selecionada}.")
 
             with tab_a_vencer:
                 if not gts_a_vencer.empty:
                     for _, r in gts_a_vencer.iterrows():
+                        r_id = r["id"]
                         msg_wpp = f"Olá {r['cliente_nome']}, sua Guia de Tráfego ({r['equipamento']}) vence em {r['validade']}. Favor entrar em contato com o Clube de Tiro Zancanaro para renovação."
                         link_wpp = f"https://api.whatsapp.com/send?phone={r['telefone']}&text={urllib.parse.quote(msg_wpp)}"
                         
                         st.markdown(f"""
-                        <div style="background-color: #fff9c4; padding: 12px; border-radius: 6px; margin-bottom: 8px; border-left: 6px solid #fbc02d;">
+                        <div style="background-color: #fff9c4; padding: 10px; border-radius: 6px; margin-bottom: 6px; border-left: 6px solid #fbc02d; font-size: 13px;">
                             <b>Atirador:</b> {r['cliente_nome']} | <b>CR:</b> {r['cr']}<br>
                             <b>Arma:</b> {r['equipamento']} | ⚠️ <b>Vence em breve:</b> <span style="color: #b78103; font-weight: bold;">{r['validade']}</span>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        c_av1, c_av2, c_av3, c_av4 = st.columns([1.2, 1.2, 1.2, 1])
+                        c_av1, c_av2, c_av3, c_av4 = st.columns([1.2, 1.2, 1, 1])
                         with c_av1:
                             st.markdown(f"<a href='{link_wpp}' target='_blank'><button style='width:100%; height:38px; background-color:#25D366; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;'>📲 WhatsApp</button></a>", unsafe_allow_html=True)
                         with c_av2:
-                            dt_ren_av = st.date_input("Nova Validade", value=datetime.now() + timedelta(days=365), key=f"dt_av_{r['id']}")
+                            dt_ren_av = st.date_input("Validade", value=datetime.now() + timedelta(days=365), key=f"dt_av_{r_id}")
                         with c_av3:
-                            colab_ren_av = st.selectbox("Atribuir a:", lista_todos_despachantes, key=f"colab_av_{r['id']}")
+                            colab_ren_av = st.selectbox("Atribuir:", lista_todos_despachantes, key=f"colab_av_{r_id}")
                         with c_av4:
                             st.write("")
-                            if st.button("🔄 Renovar", key=f"btn_ren_av_{r['id']}"):
+                            if st.button("🔄 Renovar", key=f"btn_ren_av_{r_id}", use_container_width=True):
                                 nova_val_str = dt_ren_av.strftime("%Y-%m-%d")
-                                atualizar_validade_guia_supabase(r['id'], nova_val_str)
-                                
-                                cr_obj = clientes_db_atual[clientes_db_atual["nome"] == r['cliente_nome']]
-                                cid_r = cr_obj["cidade"].values[0] if not cr_obj.empty else "Abelardo Luz - SC"
+                                atualizar_guia_supabase(r_id, {"validade": nova_val_str})
                                 
                                 info_resp_ren = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == colab_ren_av), ""), {})
                                 com_ren_val = 5.00 if info_resp_ren.get("gera_comissao", True) else 0.00
@@ -926,8 +999,8 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                 proc_ren = {
                                     "colaborador": colab_ren_av,
                                     "cliente_nome": r['cliente_nome'],
-                                    "cidade": cid_r,
-                                    "numero_processo": f"REN-GT-#{r['id']}",
+                                    "cidade": r['cidade'],
+                                    "numero_processo": f"REN-GT-#{r_id}",
                                     "servico": "Renovação de Guia de Tráfego",
                                     "valor_comissao": com_ren_val,
                                     "tipo_processo": "Novo Processo",
@@ -937,41 +1010,58 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                     "comprovante": "Sistema (Renovação GT)"
                                 }
                                 salvar_processo_supabase(proc_ren)
-                                
-                                st.success(f"Guia renovada no banco online com sucesso para {colab_ren_av}!")
+                                st.success(f"Guia renovada com sucesso para {colab_ren_av}!")
                                 st.rerun()
+                        
+                        col_ed_g1, col_ed_g2 = st.columns(2)
+                        with col_ed_g1:
+                            if st.button("✏️ Editar", key=f"btn_edit_gta_{r_id}", use_container_width=True):
+                                st.session_state[f"editando_gt_{r_id}"] = not st.session_state.get(f"editando_gt_{r_id}", False)
+                                st.rerun()
+                        with col_ed_g2:
+                            if st.button("🗑️ Excluir", key=f"btn_exc_gta_{r_id}", use_container_width=True):
+                                excluir_guia_supabase(r_id)
+                                st.warning("Guia excluída com sucesso!")
+                                st.rerun()
+
+                        if st.session_state.get(f"editando_gt_{r_id}", False):
+                            with st.form(f"form_ed_gta_{r_id}"):
+                                novo_eq = st.text_input("Equipamento / Calibre", value=r["equipamento"])
+                                if st.form_submit_button("💾 Salvar Alterações"):
+                                    atualizar_guia_supabase(r_id, {"equipamento": novo_eq})
+                                    st.session_state[f"editando_gt_{r_id}"] = False
+                                    st.success("Guia atualizada com sucesso!")
+                                    st.rerun()
                         st.markdown("---")
                 else:
-                    st.info("Nenhuma guia a vencer nos próximos 15 dias.")
+                    st.info(f"Nenhuma guia a vencer em {cidade_gt_selecionada}.")
 
             with tab_vencidas:
                 if not gts_vencidas.empty:
                     for _, r in gts_vencidas.iterrows():
+                        r_id = r["id"]
                         msg_wpp = f"Olá {r['cliente_nome']}, sua Guia de Tráfego ({r['equipamento']}) VENCEU em {r['validade']}. Precisamos providenciar a renovação urgente no Clube de Tiro Zancanaro."
                         link_wpp = f"https://api.whatsapp.com/send?phone={r['telefone']}&text={urllib.parse.quote(msg_wpp)}"
                         
                         st.markdown(f"""
-                        <div style="background-color: #ffcdd2; padding: 12px; border-radius: 6px; margin-bottom: 8px; border-left: 6px solid #c62828;">
+                        <div style="background-color: #ffcdd2; padding: 10px; border-radius: 6px; margin-bottom: 6px; border-left: 6px solid #c62828; font-size: 13px;">
                             <b>Atirador:</b> {r['cliente_nome']} | <b>CR:</b> {r['cr']}<br>
                             <b>Arma:</b> {r['equipamento']} | 🔴 <b>VENCIDA EM:</b> <span style="color: #b71c1c; font-weight: bold;">{r['validade']}</span>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        c_v1, c_v2, c_v3, c_v4 = st.columns([1.2, 1.2, 1.2, 1])
+                        c_v1, c_v2, c_v3, c_v4 = st.columns([1.2, 1.2, 1, 1])
                         with c_v1:
                             st.markdown(f"<a href='{link_wpp}' target='_blank'><button style='width:100%; height:38px; background-color:#25D366; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;'>📲 WhatsApp</button></a>", unsafe_allow_html=True)
                         with c_v2:
-                            dt_ren_v = st.date_input("Nova Validade", value=datetime.now() + timedelta(days=365), key=f"dt_v_{r['id']}")
+                            dt_ren_v = st.date_input("Validade", value=datetime.now() + timedelta(days=365), key=f"dt_v_{r_id}")
                         with c_v3:
-                            colab_ren_v = st.selectbox("Atribuir a:", lista_todos_despachantes, key=f"colab_v_{r['id']}")
+                            colab_ren_v = st.selectbox("Atribuir:", lista_todos_despachantes, key=f"colab_v_{r_id}")
                         with c_v4:
                             st.write("")
-                            if st.button("🔄 Renovar", key=f"btn_ren_v_{r['id']}"):
+                            if st.button("🔄 Renovar", key=f"btn_ren_v_{r_id}", use_container_width=True):
                                 nova_val_v_str = dt_ren_v.strftime("%Y-%m-%d")
-                                atualizar_validade_guia_supabase(r['id'], nova_val_v_str)
-                                
-                                cr_obj = clientes_db_atual[clientes_db_atual["nome"] == r['cliente_nome']]
-                                cid_r = cr_obj["cidade"].values[0] if not cr_obj.empty else "Abelardo Luz - SC"
+                                atualizar_guia_supabase(r_id, {"validade": nova_val_v_str})
                                 
                                 info_resp_ren_v = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == colab_ren_v), ""), {})
                                 com_ren_val_v = 5.00 if info_resp_ren_v.get("gera_comissao", True) else 0.00
@@ -979,8 +1069,8 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                 proc_ren = {
                                     "colaborador": colab_ren_v,
                                     "cliente_nome": r['cliente_nome'],
-                                    "cidade": cid_r,
-                                    "numero_processo": f"REN-GT-#{r['id']}",
+                                    "cidade": r['cidade'],
+                                    "numero_processo": f"REN-GT-#{r_id}",
                                     "servico": "Renovação de Guia de Tráfego",
                                     "valor_comissao": com_ren_val_v,
                                     "tipo_processo": "Novo Processo",
@@ -990,12 +1080,31 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                     "comprovante": "Sistema (Renovação GT)"
                                 }
                                 salvar_processo_supabase(proc_ren)
-                                
-                                st.success(f"Guia renovada no banco online com sucesso para {colab_ren_v}!")
+                                st.success(f"Guia renovada com sucesso para {colab_ren_v}!")
                                 st.rerun()
+
+                        col_ed_g1, col_ed_g2 = st.columns(2)
+                        with col_ed_g1:
+                            if st.button("✏️ Editar", key=f"btn_edit_gtv_{r_id}", use_container_width=True):
+                                st.session_state[f"editando_gt_{r_id}"] = not st.session_state.get(f"editando_gt_{r_id}", False)
+                                st.rerun()
+                        with col_ed_g2:
+                            if st.button("🗑️ Excluir", key=f"btn_exc_gtv_{r_id}", use_container_width=True):
+                                excluir_guia_supabase(r_id)
+                                st.warning("Guia excluída com sucesso!")
+                                st.rerun()
+
+                        if st.session_state.get(f"editando_gt_{r_id}", False):
+                            with st.form(f"form_ed_gtv_{r_id}"):
+                                novo_eq = st.text_input("Equipamento / Calibre", value=r["equipamento"])
+                                if st.form_submit_button("💾 Salvar Alterações"):
+                                    atualizar_guia_supabase(r_id, {"equipamento": novo_eq})
+                                    st.session_state[f"editando_gt_{r_id}"] = False
+                                    st.success("Guia atualizada com sucesso!")
+                                    st.rerun()
                         st.markdown("---")
                 else:
-                    st.info("Nenhuma guia vencida.")
+                    st.info(f"Nenhuma guia vencida em {cidade_gt_selecionada}.")
         else:
             st.info("Nenhuma Guia de Tráfego no sistema.")
 
@@ -1051,7 +1160,7 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
             ag_cliente = st.selectbox("Selecione o Cliente", lista_nomes_clientes if lista_nomes_clientes else ["Nenhum cliente"])
             ag_desp = st.selectbox("Despachante Responsável", lista_todos_despachantes if lista_todos_despachantes else [colaborador_atual])
             
-            nomes_serv = [s["servico"] for s in st.session_state.servicos_catalogo]
+            nomes_serv = [s["servico"] for s in servicos_catalogo_atual]
             ag_servico = st.selectbox("Tipo de Serviço a ser Feito", nomes_serv if nomes_serv else ["Nenhum serviço"])
             ag_arma = st.text_input("Arma / Equipamento Vinculado")
             
@@ -1150,7 +1259,7 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                                 idx_desp_ed = lista_todos_despachantes.index(r["despachante"]) if r["despachante"] in lista_todos_despachantes else 0
                                 e_desp = st.selectbox("Despachante Responsável", lista_todos_despachantes if lista_todos_despachantes else [colaborador_atual], index=idx_desp_ed, key=f"e_desp_{ag_id}")
                                 
-                                nomes_s_ed = [s["servico"] for s in st.session_state.servicos_catalogo]
+                                nomes_s_ed = [s["servico"] for s in servicos_catalogo_atual]
                                 idx_s_ed = nomes_s_ed.index(r["tipo_servico"]) if r["tipo_servico"] in nomes_s_ed else 0
                                 e_serv = st.selectbox("Tipo de Serviço", nomes_s_ed, index=idx_s_ed, key=f"e_serv_{ag_id}")
                                 
@@ -1247,7 +1356,7 @@ elif menu_selecionado == "🔑 Alterar Minha Senha":
 # ------------------------------------------
 elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "Gestor"]:
     st.header("⚙️ Administração de Serviços e Equipe")
-    st.caption("Gerencie o catálogo de serviços/comissões e a equipe de Gestores e Colaboradores.")
+    st.caption("Gerencie o catálogo de serviços/comissões (compartilhado na nuvem) e a equipe.")
     
     sub_tab1, sub_tab2 = st.tabs(["⚙️ Catálogo de Serviços", "👥 Gestão de Equipe (Gestores e Colaboradores)"])
     
@@ -1260,33 +1369,33 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
                 v_com = st.number_input("Valor da Comissão (R$)", min_value=0.0, value=50.0, step=10.0)
                 if st.form_submit_button("Adicionar Serviço"):
                     if n_serv:
-                        st.session_state.servicos_catalogo.append({"servico": n_serv, "comissao": v_com})
-                        st.success(f"Serviço '{n_serv}' cadastrado!")
+                        salvar_servico_supabase(n_serv.strip(), v_com)
+                        st.success(f"Serviço '{n_serv}' cadastrado na nuvem!")
                         st.rerun()
 
         with col_s2:
             st.markdown("##### ✏️ Editar / ❌ Excluir Serviço")
-            if st.session_state.servicos_catalogo:
-                lista_s_nomes = [s["servico"] for s in st.session_state.servicos_catalogo]
+            if servicos_catalogo_atual:
+                lista_s_nomes = [s["servico"] for s in servicos_catalogo_atual]
                 serv_selecionado = st.selectbox("Selecione o Serviço", lista_s_nomes)
-                idx_s = next((i for i, item in enumerate(st.session_state.servicos_catalogo) if item["servico"] == serv_selecionado), None)
+                idx_s = next((i for i, item in enumerate(servicos_catalogo_atual) if item["servico"] == serv_selecionado), None)
                 if idx_s is not None:
-                    serv_obj = st.session_state.servicos_catalogo[idx_s]
+                    serv_obj = servicos_catalogo_atual[idx_s]
                     novo_nome_s = st.text_input("Editar Nome", value=serv_obj["servico"])
                     novo_val_s = st.number_input("Editar Comissão (R$)", value=float(serv_obj["comissao"]), min_value=0.0, step=10.0)
                     col_btn_ed, col_btn_ex = st.columns(2)
                     with col_btn_ed:
                         if st.button("💾 Salvar Alterações"):
-                            st.session_state.servicos_catalogo[idx_s] = {"servico": novo_nome_s, "comissao": novo_val_s}
-                            st.success("Serviço atualizado com sucesso!")
+                            atualizar_servico_supabase(serv_obj["servico"], novo_nome_s.strip(), novo_val_s)
+                            st.success("Serviço e comissão atualizados na nuvem para todos!")
                             st.rerun()
                     with col_btn_ex:
                         if st.button("❌ Excluir Serviço"):
-                            st.session_state.servicos_catalogo.pop(idx_s)
+                            excluir_servico_supabase(serv_obj["servico"])
                             st.warning("Serviço removido!")
                             st.rerun()
         st.divider()
-        st.dataframe(pd.DataFrame(st.session_state.servicos_catalogo), use_container_width=True)
+        st.dataframe(pd.DataFrame(servicos_catalogo_atual), use_container_width=True)
 
     with sub_tab2:
         st.markdown("##### 👥 Cadastro e Gerenciamento de Usuários (Nuvem)")
@@ -1321,6 +1430,7 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
                             try:
                                 supabase.table("usuarios").insert(payload_usuario).execute()
                                 st.success(f"Usuário {nu_nome} cadastrado com sucesso na nuvem!")
+                                st.rerun()
                             except Exception as e:
                                 st.error(f"Erro ao salvar usuário: {e}")
                 else:
