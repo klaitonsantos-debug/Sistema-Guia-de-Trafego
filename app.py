@@ -114,13 +114,6 @@ def buscar_clientes_supabase():
             st.error(f"Erro ao buscar clientes: {e}")
     return pd.DataFrame(columns=["id", "nome", "cpf", "cr", "telefone", "cidade"])
 
-def salvar_cliente_supabase(dados):
-    if supabase:
-        try:
-            supabase.table("clientes").insert(dados).execute()
-        except Exception as e:
-            st.error(f"Erro ao salvar cliente: {e}")
-
 def atualizar_cliente_supabase(cli_id, dados):
     if supabase:
         try:
@@ -155,14 +148,6 @@ def buscar_usuarios_supabase():
     return {
         "Klaiton": {"senha": "134679", "nome": "Klaiton (Master)", "perfil": "Master", "gera_comissao": True}
     }
-
-def salvar_usuario_supabase(login, dados):
-    if supabase:
-        try:
-            payload = {"login": login, **dados}
-            supabase.table("usuarios").insert(payload).execute()
-        except Exception as e:
-            st.error(f"Erro ao salvar usuário: {e}")
 
 def atualizar_usuario_supabase(login_antigo, login_novo, dados):
     if supabase:
@@ -384,35 +369,6 @@ lista_todos_despachantes = [u["nome"] for u in usuarios_db_atual.values()]
 if menu_selecionado == "👤 Cadastro Único de Clientes":
     st.header("👤 Cadastro Central de Clientes")
     
-    if "temp_novo_cliente" in st.session_state:
-        dados_novo = st.session_state.temp_novo_cliente
-        st.markdown(f"""
-        <div class="card-confirmacao">
-            <h3>⚠️ Confirmação de Cadastro</h3>
-            <p>Cliente: <b>{dados_novo['nome']}</b><br>
-            Cidade: <b>{dados_novo['cidade']}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            if st.button("✅ OK, Confirmar Cadastro", key="btn_conf_cli_ok", use_container_width=True):
-                salvar_cliente_supabase({
-                    "nome": dados_novo["nome"],
-                    "cpf": dados_novo["cpf"],
-                    "cr": dados_novo["cr"],
-                    "telefone": dados_novo["telefone"],
-                    "cidade": dados_novo["cidade"]
-                })
-                del st.session_state.temp_novo_cliente
-                st.success(f"Cliente '{dados_novo['nome']}' cadastrado com sucesso na nuvem!")
-                st.rerun()
-        with col_m2:
-            if st.button("❌ Cancelar", key="btn_canc_cli_ok", use_container_width=True):
-                del st.session_state.temp_novo_cliente
-                st.rerun()
-        st.divider()
-
     with st.form("form_novo_cliente", clear_on_submit=True):
         c_nome = st.text_input("Nome Completo do Cliente")
         c_cpf = st.text_input("CPF")
@@ -426,14 +382,19 @@ if menu_selecionado == "👤 Cadastro Único de Clientes":
         
         if btn_salvar_cli:
             if c_nome and c_cidade_nome:
-                st.session_state.temp_novo_cliente = {
+                dados_cliente = {
                     "nome": c_nome.strip(),
                     "cpf": c_cpf,
                     "cr": c_cr,
                     "telefone": c_tel,
                     "cidade": f"{c_cidade_nome.strip()} - {c_estado}"
                 }
-                st.rerun()
+                if supabase:
+                    try:
+                        supabase.table("clientes").insert(dados_cliente).execute()
+                        st.success(f"Cliente '{c_nome.strip()}' salvo com sucesso na nuvem!")
+                    except Exception as e:
+                        st.error(f"Erro ao salvar cliente: {e}")
             else:
                 st.error("Preencha ao menos o Nome e a Cidade do cliente.")
 
@@ -1342,19 +1303,26 @@ elif menu_selecionado == "⚙️ Serviços & Equipe" and perfil in ["Master", "G
             nu_perfil = st.selectbox("Perfil de Acesso", perfis_cadastro)
             nu_gera_com = st.checkbox("Gera Comissões Financeiras?", value=True)
             
-            if st.form_submit_button("Cadastrar Usuário"):
+            btn_cad_usuario = st.form_submit_button("Cadastrar Usuário")
+            
+            if btn_cad_usuario:
                 if nu_user and nu_nome and nu_senha:
-                    if nu_user in usuarios_db_atual:
+                    if nu_user.strip() in usuarios_db_atual:
                         st.error("Este login já existe.")
                     else:
-                        salvar_usuario_supabase(nu_user.strip(), {
+                        payload_usuario = {
+                            "login": nu_user.strip(),
                             "senha": nu_senha,
                             "nome": nu_nome,
                             "perfil": nu_perfil,
                             "gera_comissao": nu_gera_com
-                        })
-                        st.success(f"Usuário {nu_nome} cadastrado com sucesso na nuvem!")
-                        st.rerun()
+                        }
+                        if supabase:
+                            try:
+                                supabase.table("usuarios").insert(payload_usuario).execute()
+                                st.success(f"Usuário {nu_nome} cadastrado com sucesso na nuvem!")
+                            except Exception as e:
+                                st.error(f"Erro ao salvar usuário: {e}")
                 else:
                     st.error("Preencha todos os campos obrigatórios.")
         
