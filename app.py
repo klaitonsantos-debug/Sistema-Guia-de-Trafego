@@ -206,7 +206,7 @@ def excluir_servico_supabase(servico):
         except Exception as e:
             st.error(f"Erro ao excluir serviço: {e}")
 
-# Funções de Supabase para Guias de Tráfego (Com tratamento robusto de nulos)
+# Funções de Supabase para Guias de Tráfego
 def buscar_guias_supabase():
     if supabase:
         try:
@@ -546,6 +546,10 @@ elif menu_selecionado == "🏙️ Clientes por Cidade":
 elif menu_selecionado == "💰 Gestão de Comissões & Processos":
     mes_atual = datetime.now().strftime("%Y-%m")
     df_proc = buscar_processos_supabase()
+    
+    # Formatar data_envio para dd/mm/aaaa na exibição se existir
+    if not df_proc.empty and "data_envio" in df_proc.columns:
+        df_proc["data_envio_fmt"] = pd.to_datetime(df_proc["data_envio"], errors='coerce').dt.strftime("%d/%m/%Y").fillna(df_proc["data_envio"])
 
     if perfil in ["Master", "Gestor"]:
         st.header(f"👑 Painel da Administração ({perfil}) - Controle de Comissões")
@@ -587,7 +591,9 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
             if st.session_state.get(f"ver_{colab}", False):
                 st.markdown(f"#### 📄 Processos do Mês de {colab}")
                 if total_proc > 0:
-                    st.dataframe(df_c[["cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "data_envio", "comissao_devida"]], use_container_width=True)
+                    df_exib_det = df_c.copy()
+                    df_exib_det["Data Envio"] = df_exib_det["data_envio_fmt"]
+                    st.dataframe(df_exib_det[["cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "Data Envio", "comissao_devida"]], use_container_width=True)
                 else:
                     st.info("Nenhum lançamento no mês para este colaborador.")
 
@@ -617,7 +623,9 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
             
             st.subheader("📋 Seus Processos em Andamento / Concluídos no Mês")
             if not df_meus_processos.empty:
-                st.dataframe(df_meus_processos[["cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "data_envio", "comissao_devida"]], use_container_width=True)
+                df_meu_exib = df_meus_processos.copy()
+                df_meu_exib["Data Envio"] = df_meu_exib["data_envio_fmt"]
+                st.dataframe(df_meu_exib[["cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "Data Envio", "comissao_devida"]], use_container_width=True)
             else:
                 st.info("Nenhum processo registrado em seu nome neste mês.")
         else:
@@ -632,7 +640,9 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
             
             st.subheader("📋 Seus Processos Realizados no Mês")
             if not df_meus_processos.empty:
-                st.dataframe(df_meus_processos[["cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "data_envio"]], use_container_width=True)
+                df_meu_exib = df_meus_processos.copy()
+                df_meu_exib["Data Envio"] = df_meu_exib["data_envio_fmt"]
+                st.dataframe(df_meu_exib[["cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "Data Envio"]], use_container_width=True)
             else:
                 st.info("Nenhum processo registrado em seu nome neste mês.")
         st.divider()
@@ -648,6 +658,7 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
             <p>Cliente: <b>{tp['cliente_nome']}</b><br>
             Serviço: <b>{tp['servico']}</b><br>
             Nº Processo: <b>{tp['numero_processo']}</b><br>
+            Data: <b>{tp['data_envio_exib']}</b><br>
             Colaborador: <b>{tp['colaborador']}</b></p>
         </div>
         """, unsafe_allow_html=True)
@@ -768,7 +779,8 @@ elif menu_selecionado == "💰 Gestão de Comissões & Processos":
                     "servico": servico_sel,
                     "valor_comissao": valor_base,
                     "tipo_processo": tipo_proc,
-                    "data_envio": data_envio.strftime("%Y-%m-%d"),
+                    "data_envio": data_envio.strftime("%d/%m/%Y"), # Salva no formato dd/mm/aaaa
+                    "data_envio_exib": data_envio.strftime("%d/%m/%Y"),
                     "mes_referencia": data_envio.strftime("%Y-%m"),
                     "comissao_devida": comissao_calc,
                     "comprovante": "Anexado" if print_comprovante else "Não informado",
@@ -794,6 +806,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                 <h3>⚠️ Confirmação de Emissão de Guia de Tráfego</h3>
                 <p>Atirador: <b>{tg['cliente_nome']}</b><br>
                 Arma: <b>{tg['equipamento']}</b><br>
+                Validade: <b>{tg['validade_exib']}</b><br>
                 Cidade: <b>{tg['cidade']}</b><br>
                 Colaborador: <b>{tg['colaborador']}</b></p>
             </div>
@@ -802,14 +815,14 @@ elif menu_selecionado == "📜 Guias de Tráfego":
             col_mg1, col_mg2 = st.columns(2)
             with col_mg1:
                 if st.button("✅ OK, Confirmar Emissão", key="btn_conf_gt_ok", use_container_width=True):
-                    data_hoje_str = datetime.now().strftime("%Y-%m-%d")
+                    data_hoje_str = datetime.now().strftime("%d/%m/%Y")
                     mes_hoje_str = datetime.now().strftime("%Y-%m")
                     
                     dados_nova_gt_db = {
                         "cliente_nome": tg["cliente_nome"],
                         "cr": tg["cr"],
                         "equipamento": tg["equipamento"],
-                        "validade": tg["validade"],
+                        "validade": tg["validade"], # formato dd/mm/aaaa
                         "telefone": tg["telefone"],
                         "cidade": tg["cidade"]
                     }
@@ -899,7 +912,8 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                         "cliente_nome": gt_cliente,
                         "cr": cr_auto,
                         "equipamento": gt_arma,
-                        "validade": gt_validade.strftime("%Y-%m-%d"),
+                        "validade": gt_validade.strftime("%d/%m/%Y"), # dd/mm/aaaa
+                        "validade_exib": gt_validade.strftime("%d/%m/%Y"),
                         "telefone": tel_auto,
                         "cidade": cidade_gt_auto,
                         "colaborador": colab_gt_ganhador,
@@ -918,7 +932,13 @@ elif menu_selecionado == "📜 Guias de Tráfego":
             
             df_gts_cidade = df_gts[df_gts["cidade"] == cidade_gt_selecionada].copy()
             hoje = datetime.now().date()
-            df_gts_cidade["validade_dt"] = pd.to_datetime(df_gts_cidade["validade"]).dt.date
+            
+            # Converter coluna validade (aceita formato dd/mm/aaaa ou aaaa-mm-dd)
+            df_gts_cidade["validade_dt"] = pd.to_datetime(df_gts_cidade["validade"], format="%d/%m/%Y", errors="coerce")
+            mask_iso = df_gts_cidade["validade_dt"].isna()
+            if mask_iso.any():
+                df_gts_cidade.loc[mask_iso, "validade_dt"] = pd.to_datetime(df_gts_cidade.loc[mask_iso, "validade"], errors="coerce")
+            df_gts_cidade["validade_dt"] = df_gts_cidade["validade_dt"].dt.date
             
             gts_em_dia = df_gts_cidade[df_gts_cidade["validade_dt"] > (hoje + timedelta(days=15))]
             gts_a_vencer = df_gts_cidade[(df_gts_cidade["validade_dt"] >= hoje) & (df_gts_cidade["validade_dt"] <= (hoje + timedelta(days=15)))]
@@ -955,11 +975,19 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                         if st.session_state.get(f"editando_gt_{r_id}", False):
                             with st.form(f"form_ed_gt_{r_id}"):
                                 novo_eq = st.text_input("Equipamento / Calibre", value=r["equipamento"])
-                                nova_val = st.date_input("Nova Validade", value=pd.to_datetime(r["validade"]))
+                                # Tentar carregar data atual para o date_input
+                                try:
+                                    dt_val_atual = datetime.strptime(r["validade"], "%d/%m/%Y")
+                                except:
+                                    try:
+                                        dt_val_atual = pd.to_datetime(r["validade"])
+                                    except:
+                                        dt_val_atual = datetime.now()
+                                nova_val = st.date_input("Nova Validade", value=dt_val_atual)
                                 if st.form_submit_button("💾 Salvar Alterações"):
                                     atualizar_guia_supabase(r_id, {
                                         "equipamento": novo_eq,
-                                        "validade": nova_val.strftime("%Y-%m-%d")
+                                        "validade": nova_val.strftime("%d/%m/%Y")
                                     })
                                     st.session_state[f"editando_gt_{r_id}"] = False
                                     st.success("Guia atualizada com sucesso!")
@@ -992,7 +1020,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                         with c_av4:
                             st.write("")
                             if st.button("🔄 Renovar", key=f"btn_ren_av_{r_id}", use_container_width=True):
-                                nova_val_str = dt_ren_av.strftime("%Y-%m-%d")
+                                nova_val_str = dt_ren_av.strftime("%d/%m/%Y")
                                 atualizar_guia_supabase(r_id, {"validade": nova_val_str})
                                 
                                 info_resp_ren = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == colab_ren_av), ""), {})
@@ -1006,7 +1034,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                     "servico": "Renovação de Guia de Tráfego",
                                     "valor_comissao": com_ren_val,
                                     "tipo_processo": "Novo Processo",
-                                    "data_envio": datetime.now().strftime("%Y-%m-%d"),
+                                    "data_envio": datetime.now().strftime("%d/%m/%Y"),
                                     "mes_referencia": datetime.now().strftime("%Y-%m"),
                                     "comissao_devida": com_ren_val,
                                     "comprovante": "Sistema (Renovação GT)"
@@ -1062,7 +1090,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                         with c_v4:
                             st.write("")
                             if st.button("🔄 Renovar", key=f"btn_ren_v_{r_id}", use_container_width=True):
-                                nova_val_v_str = dt_ren_v.strftime("%Y-%m-%d")
+                                nova_val_v_str = dt_ren_v.strftime("%d/%m/%Y")
                                 atualizar_guia_supabase(r_id, {"validade": nova_val_v_str})
                                 
                                 info_resp_ren_v = usuarios_db_atual.get(next((k for k, v in usuarios_db_atual.items() if v["nome"] == colab_ren_v), ""), {})
@@ -1076,7 +1104,7 @@ elif menu_selecionado == "📜 Guias de Tráfego":
                                     "servico": "Renovação de Guia de Tráfego",
                                     "valor_comissao": com_ren_val_v,
                                     "tipo_processo": "Novo Processo",
-                                    "data_envio": datetime.now().strftime("%Y-%m-%d"),
+                                    "data_envio": datetime.now().strftime("%d/%m/%Y"),
                                     "mes_referencia": datetime.now().strftime("%Y-%m"),
                                     "comissao_devida": com_ren_val_v,
                                     "comprovante": "Sistema (Renovação GT)"
@@ -1136,7 +1164,7 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
             c_ma_esp1, col_ma1, col_ma2, c_ma_esp2 = st.columns([1, 1.2, 1.2, 1])
             with col_ma1:
                 if st.button("✅ OK, Confirmar", key="btn_conf_ag_ok", use_container_width=True):
-                    data_cadastro_hoje = datetime.now().strftime("%Y-%m-%d")
+                    data_cadastro_hoje = datetime.now().strftime("%d/%m/%Y")
                     novo_ag = {
                         "data_cadastro": data_cadastro_hoje,
                         "cliente_nome": ta["cliente_nome"],
@@ -1195,6 +1223,8 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
         tab_pendentes, tab_feitos = st.tabs(["⏳ Processos A Fazer (Pendentes)", "✅ Processos Feitos (Concluídos)"])
         
         df_ag = buscar_agenda_supabase()
+        if not df_ag.empty and "data_cadastro" in df_ag.columns:
+            df_ag["data_cadastro_fmt"] = pd.to_datetime(df_ag["data_cadastro"], errors='coerce').dt.strftime("%d/%m/%Y").fillna(df_ag["data_cadastro"])
         
         with tab_pendentes:
             st.markdown(f"##### 🎯 Fila de Serviços A Fazer (Visão: **{perfil}**)")
@@ -1223,13 +1253,14 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                         ag_id = r['id']
                         psi_status = r.get('teste_psicologico', 'Não')
                         tiro_status = r.get('teste_tiro', 'Não')
+                        data_cad_exib = r.get('data_cadastro_fmt', r.get('data_cadastro', ''))
                         
                         col_info, col_c, col_e, col_x = st.columns([5, 1, 1, 1])
                         
                         with col_info:
                             st.markdown(f"""
                             <div style="background-color: #a5d6a7; padding: 8px 12px; border-radius: 6px; border-left: 5px solid #1b5e20; font-size: 13px;">
-                                📅 <b>{r['data_cadastro']}</b> | 👤 <b>{r['cliente_nome']}</b> | 🎯 {r['tipo_servico']} | 🔫 {r['arma_equipamento'] if r['arma_equipamento'] else 'N/A'}<br>
+                                📅 <b>{data_cad_exib}</b> | 👤 <b>{r['cliente_nome']}</b> | 🎯 {r['tipo_servico']} | 🔫 {r['arma_equipamento'] if r['arma_equipamento'] else 'N/A'}<br>
                                 🧠 Psicológico: <b>{psi_status}</b> | 🎯 Teste de Tiro: <b>{tiro_status}</b> | 👨‍💼 <b>{r['despachante']}</b>
                             </div>
                             """, unsafe_allow_html=True)
@@ -1305,9 +1336,10 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                 df_feitos["cidade"] = "Abelardo Luz - SC"
 
             if not df_feitos.empty:
-                colunas_exibicao = ["data_cadastro", "cliente_nome", "cidade", "despachante", "tipo_servico", "arma_equipamento", "teste_psicologico", "teste_tiro"]
+                df_feitos_exib = df_feitos.copy()
+                df_feitos_exib["Data de Cadastro"] = df_feitos_exib["data_cadastro_fmt"]
+                colunas_exibicao = ["Data de Cadastro", "cliente_nome", "cidade", "despachante", "tipo_servico", "arma_equipamento", "teste_psicologico", "teste_tiro"]
                 renomear_colunas = {
-                    "data_cadastro": "Data de Cadastro",
                     "cliente_nome": "Nome do Cliente",
                     "cidade": "Cidade",
                     "despachante": "Despachante",
@@ -1316,7 +1348,7 @@ elif menu_selecionado == "📅 Agenda & Processos a Fazer":
                     "teste_psicologico": "Psicológico Feito",
                     "teste_tiro": "Teste de Tiro Feito"
                 }
-                df_exibir_f = df_feitos[colunas_exibicao].rename(columns=renomear_colunas)
+                df_exibir_f = df_feitos_exib[colunas_exibicao].rename(columns=renomear_colunas)
                 st.dataframe(df_exibir_f, use_container_width=True)
             else:
                 st.info("Nenhum processo concluído no histórico.")
@@ -1506,7 +1538,20 @@ elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", 
     df_proc_rel = buscar_processos_supabase()
     
     if not df_proc_rel.empty:
-        df_proc_rel["ano"] = pd.to_datetime(df_proc_rel["data_envio"]).dt.year.astype(str)
+        # Extrair ano da data de envio (lidando com dd/mm/aaaa ou aaaa-mm-dd)
+        def extrair_ano(val):
+            val_str = str(val)
+            if "/" in val_str:
+                partes = val_str.split("/")
+                if len(partes) == 3:
+                    return partes[2]
+            elif "-" in val_str:
+                return val_str.split("-")[0]
+            return "2026"
+
+        df_proc_rel["ano"] = df_proc_rel["data_envio"].apply(extrair_ano)
+        if "data_envio" in df_proc_rel.columns:
+            df_proc_rel["data_envio_fmt"] = pd.to_datetime(df_proc_rel["data_envio"], errors='coerce').dt.strftime("%d/%m/%Y").fillna(df_proc_rel["data_envio"])
         
         col_rf1, col_rf2, col_rf3, col_rf4 = st.columns(4)
         with col_rf1:
@@ -1579,7 +1624,9 @@ elif menu_selecionado == "📊 Relatórios Gerenciais" and perfil in ["Master", 
             
         st.subheader("📄 Listagem Detalhada dos Processos Filtrados")
         if not df_filtrado.empty:
-            st.dataframe(df_filtrado[["data_envio", "colaborador", "cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "comissao_devida"]], use_container_width=True)
+            df_rel_exib = df_filtrado.copy()
+            df_rel_exib["Data Envio"] = df_rel_exib["data_envio_fmt"]
+            st.dataframe(df_rel_exib[["Data Envio", "colaborador", "cliente_nome", "cidade", "numero_processo", "servico", "tipo_processo", "comissao_devida"]], use_container_width=True)
         else:
             st.info("Nenhum processo na listagem detalhada.")
     else:
