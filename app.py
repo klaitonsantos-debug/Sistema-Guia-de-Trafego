@@ -206,15 +206,17 @@ def excluir_servico_supabase(servico):
         except Exception as e:
             st.error(f"Erro ao excluir serviço: {e}")
 
-# Funções de Supabase para Guias de Tráfego
+# Funções de Supabase para Guias de Tráfego (Com tratamento robusto de nulos)
 def buscar_guias_supabase():
     if supabase:
         try:
             res = supabase.table("guias_trafego").select("*").execute()
             if res.data:
                 df = pd.DataFrame(res.data)
-                if "cidade" not in df.columns:
+                if "cidade" not in df.columns or df["cidade"].isnull().all():
                     df["cidade"] = "Abelardo Luz - SC"
+                else:
+                    df["cidade"] = df["cidade"].fillna("Abelardo Luz - SC")
                 return df
         except Exception as e:
             st.error(f"Erro ao buscar guias: {e}")
